@@ -25,6 +25,7 @@ function ensureLoginUI(){
   const box=document.createElement('div');
   box.id='firebaseLogin';
   box.innerHTML=`
+    <img id="firebaseLoginBackground" src="assets/login-backgrounds/illuminated-3840x2160-18078.jpg" alt="" aria-hidden="true">
     <div class="firebase-login-card" dir="ltr">
       <div class="firebase-login-mark" aria-hidden="true">
         <svg viewBox="0 0 64 64" role="img">
@@ -99,6 +100,27 @@ function ensureLoginUI(){
     }
   });
   document.body.appendChild(box);
+
+  // Login background slideshow: changes instantly every 10 seconds, with no transition/fade.
+  const loginBackground=document.getElementById('firebaseLoginBackground');
+  const loginBackgrounds=[
+    'assets/login-backgrounds/illuminated-3840x2160-18078.jpg',
+    'assets/login-backgrounds/full-moon-forest-night-dark-starry-sky-5k-8k-3840x2160-1684.jpg',
+    'assets/login-backgrounds/snowy-mountains-3840x2160-26363.jpg',
+    'assets/login-backgrounds/macos-monterey-stock-black-dark-mode-layers-5k-3840x2160-5889.jpg',
+    'assets/login-backgrounds/mountain-landscape-3840x2160-24317.jpg',
+    'assets/login-backgrounds/windows-xp-3840x2160-17062.jpg',
+    'assets/login-backgrounds/microsoft-surface-3840x2160-26627.png'
+  ];
+  if(loginBackground && !window.__loginBackgroundSlideshowStarted){
+    window.__loginBackgroundSlideshowStarted=true;
+    let loginBackgroundIndex=0;
+    window.setInterval(()=>{
+      loginBackgroundIndex=(loginBackgroundIndex+1)%loginBackgrounds.length;
+      loginBackground.src=loginBackgrounds[loginBackgroundIndex];
+    },10000);
+  }
+
   const form=document.getElementById('firebaseLoginForm');
   form.addEventListener('submit', async e=>{
     e.preventDefault();
