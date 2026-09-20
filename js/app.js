@@ -77,13 +77,18 @@ const fmt=n=>Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximu
 const arEn=(ar,en)=>db.lang==="ar"?ar:en;
 
 function installFirebaseUserBar(){
-  const side=document.querySelector('.side-bottom');
-  if(!side || document.getElementById('firebaseLogoutBtn')) return;
-  const wrap=document.createElement('div'); wrap.className='firebase-user-bar';
-  wrap.innerHTML='<span id="firebaseUserEmail"></span><button id="firebaseLogoutBtn" class="soft-btn">خروج</button>';
-  side.parentNode.insertBefore(wrap,side);
-  document.getElementById('firebaseLogoutBtn').onclick=()=>window.firebaseSignOut();
-  const el=document.getElementById('firebaseUserEmail'); if(el) el.textContent=firebaseUser.email||'';
+  const bar=document.getElementById('firebaseUserBar');
+  const btn=document.getElementById('firebaseLogoutBtn');
+  const el=document.getElementById('firebaseUserEmail');
+  if(el) el.textContent=firebaseUser.email||'';
+  if(!bar){
+    const side=document.querySelector('.side-bottom');
+    if(!side) return;
+    const wrap=document.createElement('div'); wrap.className='firebase-user-bar'; wrap.id='firebaseUserBar';
+    wrap.innerHTML='<span id="firebaseUserEmail"></span><button id="firebaseLogoutBtn" class="soft-btn" type="button">خروج</button>';
+    side.parentNode.insertBefore(wrap,side);
+    wrap.querySelector('#firebaseUserEmail').textContent=firebaseUser.email||'';
+  }
 }
 installFirebaseUserBar();
 function save(){

@@ -5,12 +5,12 @@ import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/fireb
 // Firebase Web configuration for the Accounting Management System.
 // These values identify the web app; they are not a service-account private key.
 const firebaseConfig = {
-  apiKey: 'AIzaSyBy0jJ6FVqNJBvdEhRd2Zv3prYaSchwL_w',
+  apiKey: 'AIzaSyBy0jJ6FVqNJBvdEhRd2Zv3prYaSchwI_w',
   authDomain: 'mostafa-s-myth.firebaseapp.com',
   projectId: 'mostafa-s-myth',
   storageBucket: 'mostafa-s-myth.firebasestorage.app',
-  messagingSenderId: '131950634248',
-  appId: '1:131950634248:web:7dcae2a4e72b5caeedb8bd',
+  messagingSenderId: '131956634248',
+  appId: '1:131956634248:web:7dcae2a4e72b5caeedb8bd',
   measurementId: 'G-D44B5N4WZW'
 };
 
@@ -31,7 +31,7 @@ function ensureLoginUI(){
       <h2>نظام الإدارة والمحاسبة</h2>
       <p>تسجيل الدخول للوصول إلى النظام</p>
       <form id="firebaseLoginForm" autocomplete="on">
-        <label>البريد الإلكتروني<input id="firebaseEmail" type="email" autocomplete="username" required placeholder="البريد الإلكتروني"></label>
+        <label>اسم المستخدم (البريد الإلكتروني)<input id="firebaseEmail" type="email" autocomplete="username" required placeholder="example@email.com"></label>
         <label>كلمة المرور<input id="firebasePassword" type="password" autocomplete="current-password" required placeholder="كلمة المرور"></label>
         <button class="gold-btn firebase-login-btn" type="submit">دخول</button>
         <div id="firebaseLoginError" class="firebase-login-error" role="alert"></div>
@@ -70,10 +70,37 @@ function showApp(user){
   document.body.classList.remove('firebase-locked');
   document.getElementById('firebaseLogin').classList.remove('show');
   const label=document.getElementById('firebaseUserEmail');
-  if(label) label.textContent=user?.email||'';
+  if(label){ label.textContent=user?.email||''; label.title=user?.email||''; }
+  const logout=document.getElementById('firebaseLogoutBtn');
+  if(logout && !logout.dataset.bound){
+    logout.dataset.bound='1';
+    logout.addEventListener('click', async (event)=>{
+      event.preventDefault();
+      event.stopPropagation();
+      logout.disabled=true;
+      logout.textContent='جارٍ الخروج...';
+      try{
+        await signOut(auth);
+        window.location.reload();
+      }catch(err){
+        console.error('Firebase sign-out failed:', err);
+        logout.disabled=false;
+        logout.textContent='خروج';
+        alert('تعذر تسجيل الخروج. تأكد من اتصال الإنترنت ثم حاول مرة أخرى.');
+      }
+    });
+  }
 }
 
-window.firebaseSignOut=async()=>{ await signOut(auth); location.reload(); };
+window.firebaseSignOut=async()=>{
+  try{
+    await signOut(auth);
+    window.location.reload();
+  }catch(err){
+    console.error('Firebase sign-out failed:', err);
+    alert('تعذر تسجيل الخروج. تأكد من اتصال الإنترنت ثم حاول مرة أخرى.');
+  }
+};
 
 window.firebaseUserReady = new Promise(resolve=>{
   let resolved=false;
