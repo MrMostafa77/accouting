@@ -52,9 +52,17 @@ function ensureLoginUI(){
         'auth/invalid-credential':'بيانات الدخول غير صحيحة.',
         'auth/invalid-email':'صيغة البريد الإلكتروني غير صحيحة.',
         'auth/too-many-requests':'تمت محاولات كثيرة. حاول مرة أخرى لاحقاً.',
-        'auth/network-request-failed':'تعذر الاتصال بالإنترنت.'
+        'auth/network-request-failed':'تعذر الاتصال بالإنترنت.',
+        'auth/user-disabled':'هذا الحساب معطّل من Firebase.',
+        'auth/user-not-found':'المستخدم غير موجود في Firebase Authentication.',
+        'auth/wrong-password':'كلمة المرور غير صحيحة.',
+        'auth/operation-not-allowed':'تسجيل الدخول بالبريد وكلمة المرور غير مفعّل في Firebase Console (Sign-in method).',
+        'auth/unauthorized-domain':'هذا الدومين غير مضاف في Authentication > Settings > Authorized domains.',
+        'auth/api-key-not-valid.-please-pass-a-valid-api-key.':'مفتاح API غير صالح.',
+        'auth/invalid-api-key':'مفتاح API غير صالح.'
       };
-      err.textContent=map[ex?.code]||'تعذر تسجيل الدخول. تحقق من البيانات وحاول مرة أخرى.';
+      console.error('Firebase sign-in failed:', ex?.code, ex?.message, ex);
+      err.textContent=(map[ex?.code]||'تعذر تسجيل الدخول.')+' ['+(ex?.code||'no-code')+']';
       btn.disabled=false; btn.textContent='دخول';
     }
   });
