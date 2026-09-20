@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MOSTAFA MYTH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="bg"></div><div class="grid"></div>
+<div id="toast" class="toast"></div>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><div class="brand-icon">M</div><div><b>MOSTAFA MYTH</b><span>ACCOUNTING SYSTEM</span></div></div>
+    <div class="company-box"><small data-ar="النظام المحاسبي" data-en="Accounting System">النظام المحاسبي</small><strong>MOSTAFA MYTH</strong><em>LIVE • LOCAL</em></div>
+    <nav>
+      <button class="nav active" data-view="home">⌂ <span data-ar="الرئيسية" data-en="Dashboard">الرئيسية</span></button>
+      <button class="nav" data-view="tree">⌘ <span data-ar="شجرة الحسابات" data-en="Chart of Accounts">شجرة الحسابات</span></button>
+      <button class="nav" data-view="journal">▤ <span data-ar="قيود اليومية" data-en="Journal Entries">قيود اليومية</span></button>
+      <button class="nav" data-view="ledger">▥ <span data-ar="الأستاذ العام" data-en="General Ledger">الأستاذ العام</span></button>
+      <button class="nav" data-view="trial">◫ <span data-ar="ميزان المراجعة" data-en="Trial Balance">ميزان المراجعة</span></button>
+      <button class="nav" data-view="statements">▦ <span data-ar="القوائم المالية" data-en="Financial Statements">القوائم المالية</span></button>
+      <button class="nav" data-view="reports">▤ <span data-ar="التقارير" data-en="Reports">التقارير</span></button>
+      <button class="nav" data-view="customers">♙ <span data-ar="العملاء والمبيعات" data-en="Customers & Sales">العملاء والمبيعات</span></button>
+    </nav>
+    <div class="side-bottom">
+      <button id="langBtn" class="soft-btn">EN</button><button id="themeBtn" class="soft-btn">☾</button>
+      <button id="backupBtn" class="soft-btn" title="Backup">⇩</button>
+    </div>
+  </aside>
+
+  <main>
+    <header class="top">
+      <button id="menuBtn" class="hamb">☰</button>
+      <div><span class="kicker">ACCOUNTING • CONTROL • ANALYTICS</span><h1 id="title">لوحة التحكم</h1></div>
+      <div class="top-right"><div class="datetime-widget" id="datetimeWidget" aria-label="التاريخ والوقت"><div class="datetime-icon">◷</div><div class="datetime-content"><div class="clock-time" id="clockTime">00:00:00</div><div class="clock-date" id="clockDate">—</div><div class="clock-day" id="clockDay">—</div></div></div><button id="printBtn" class="gold-btn">🖨 <span data-ar="طباعة" data-en="Print">طباعة</span></button></div>
+    </header>
+
+    <section id="home" class="view active">
+      <div class="hero program-hero"><div class="program-hero-content"><span class="pill">ACCOUNTING SYSTEM</span><h2 class="program-title" data-ar="MOSTAFA MYTH" data-en="MOSTAFA MYTH">MOSTAFA MYTH</h2><p class="program-subtitle" data-ar="نظام المحاسبة والإدارة المالية" data-en="Accounting & Financial Management System">نظام المحاسبة والإدارة المالية</p></div></div>
+      <div class="stats" id="stats"></div>
+      <div class="home-grid"><div class="panel"><div class="panel-head"><h3 data-ar="آخر القيود" data-en="Recent Entries">آخر القيود</h3><button class="link-btn" onclick="openView('journal')" data-ar="عرض الكل" data-en="View all">عرض الكل</button></div><div id="recent"></div></div>
+      <div class="panel"><div class="panel-head"><h3 data-ar="هيكل الحسابات" data-en="Account Structure">هيكل الحسابات</h3><button class="link-btn" onclick="openView('tree')" data-ar="فتح الشجرة" data-en="Open tree">فتح الشجرة</button></div><div id="miniTree"></div></div></div>
+    </section>
+
+    <section id="tree" class="view">
+      <div class="section-head"><div><span class="kicker" data-ar="MASTER DATA" data-en="MASTER DATA">MASTER DATA</span><h2 data-ar="شجرة الحسابات" data-en="Chart of Accounts">شجرة الحسابات</h2><p data-ar="نفس مستويات وكود الحسابات الموجودة في ملف Excel، مع توسعة وطي وإضافة وتعديل." data-en="Same account codes and levels from Excel, with expand/collapse, add and edit.">نفس مستويات وكود الحسابات الموجودة في ملف Excel، مع توسعة وطي وإضافة وتعديل.</p></div><button class="gold-btn" onclick="openAccountModal()">＋ <span data-ar="حساب جديد" data-en="New Account">حساب جديد</span></button></div>
+      <div class="toolbar"><div class="search"><span>⌕</span><input id="treeSearch" placeholder="ابحث بالكود أو اسم الحساب..." data-ph-ar="ابحث بالكود أو اسم الحساب..." data-ph-en="Search by code or account name..."></div><button class="soft-btn" id="expandAll">＋ <span data-ar="توسيع الكل" data-en="Expand all">توسيع الكل</span></button><button class="soft-btn" id="collapseAll">− <span data-ar="طي الكل" data-en="Collapse all">طي الكل</span></button></div>
+      <div class="tree-layout"><div class="panel tree-panel"><div id="treeRoot" class="tree-root"></div></div><aside class="panel account-info" id="accountInfo"><div class="empty"><div>⌁</div><b data-ar="اختر حساباً" data-en="Select an account">اختر حساباً</b><span data-ar="ستظهر تفاصيل الحساب هنا" data-en="Account details will appear here">ستظهر تفاصيل الحساب هنا</span></div></aside></div>
+    </section>
+
+    <section id="journal" class="view">
+      <div class="section-head"><div><span class="kicker">TRANSACTION ENGINE</span><h2 data-ar="قيود اليومية" data-en="Journal Entries">قيود اليومية</h2><p data-ar="إدخال قيود متعددة الأطراف مع تحقق تلقائي من توازن المدين والدائن." data-en="Multi-line journal entry input with automatic debit/credit balancing.">إدخال قيود متعددة الأطراف مع تحقق تلقائي من توازن المدين والدائن.</p></div><button class="gold-btn" onclick="openJournalModal()">＋ <span data-ar="قيد جديد" data-en="New Entry">قيد جديد</span></button></div>
+      <div class="journal-summary" id="journalSummary"></div>
+      <div id="journalPager"></div>
+      <div id="journalEditor" class="journal-editor panel" style="display:none"></div>
+      <div class="panel table-panel" id="journalTablePanel"><div class="table-wrap"><table><thead><tr><th>#</th><th data-ar="التاريخ" data-en="Date">التاريخ</th><th data-ar="الحساب" data-en="Account">الحساب</th><th data-ar="البيان" data-en="Description">البيان</th><th data-ar="فاتورة" data-en="Invoice">فاتورة</th><th data-ar="مدين" data-en="Debit">مدين</th><th data-ar="دائن" data-en="Credit">دائن</th></tr></thead><tbody id="journalBody"></tbody></table></div></div>
+    </section>
+
+    <section id="ledger" class="view">
+      <div class="section-head"><div><span class="kicker">GENERAL LEDGER</span><h2 data-ar="الأستاذ العام" data-en="General Ledger">الأستاذ العام</h2><p data-ar="اختر حساباً لمراجعة الحركة والرصيد التراكمي." data-en="Select an account to review movements and running balance.">اختر حساباً لمراجعة الحركة والرصيد التراكمي.</p></div></div>
+      <div class="filters ledger-filters">
+        <div class="ledger-account-search"><input id="ledgerSearch" type="search" autocomplete="off" data-ph-ar="ابحث بكود الحساب أو اسم الحساب" data-ph-en="Search by account code أو اسم الحساب" placeholder="ابحث بكود الحساب أو اسم الحساب"><div id="ledgerAccountResults" class="ledger-account-results"></div></div>
+        <select id="ledgerAccount"><option value="">اختر الحساب</option></select>
+        <input type="date" id="ledgerFrom">
+        <input type="date" id="ledgerTo">
+      </div>
+      <div id="ledgerArea" class="panel table-panel"></div>
+    </section>
+
+
+    <section id="statements" class="view">
+      <div class="section-head"><div><span class="kicker">FINANCIAL STATEMENTS</span><h2 data-ar="القوائم المالية" data-en="Financial Statements">القوائم المالية</h2><p data-ar="قوائم مالية فعلية مبنية على قيود اليومية وشجرة الحسابات." data-en="Live financial statements built from journal entries and the chart of accounts.">قوائم مالية فعلية مبنية على قيود اليومية وشجرة الحسابات.</p></div><div class="section-export-actions"><button type="button" class="soft-btn" data-section-print="statements">🖨 <span data-ar="طباعة" data-en="Print">طباعة</span></button><button type="button" class="soft-btn" data-section-excel="statements">📊 <span>Excel</span></button><button type="button" class="soft-btn" data-section-pdf="statements">📄 <span>PDF</span></button></div></div>
+      <div class="report-tabs" id="statementTabs">
+        <button class="report-tab active" data-statement="balanceSheet" data-ar="قائمة المركز المالي" data-en="Statement of Financial Position">قائمة المركز المالي</button>
+        <button class="report-tab" data-statement="income" data-ar="قائمة الدخل" data-en="Income Statement">قائمة الدخل</button>
+        <button class="report-tab" data-statement="equity" data-ar="قائمة التغيرات في حقوق الملكية" data-en="Statement of Changes in Equity">قائمة التغيرات في حقوق الملكية</button>
+        <button class="report-tab" data-statement="cash" data-ar="قائمة التدفقات النقدية" data-en="Cash Flow Statement">قائمة التدفقات النقدية</button>
+      </div>
+      <div class="report-filters panel"><label data-ar="من تاريخ" data-en="From">من تاريخ</label><input type="date" id="stmtFrom"><label data-ar="إلى تاريخ" data-en="To">إلى تاريخ</label><input type="date" id="stmtTo"><label data-ar="المستوى" data-en="Level">المستوى</label><select id="stmtLevel"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select><label class="check-inline"><input type="checkbox" id="stmtHideZero"><span data-ar="إخفاء الأرصدة الصفرية" data-en="Hide zero balances">إخفاء الأرصدة الصفرية</span></label></div>
+      <div id="statementArea" class="panel table-panel"></div>
+    </section>
+    <section id="reports" class="view">
+      <div class="section-head"><div><span class="kicker">REPORTS</span><h2 data-ar="التقارير" data-en="Reports">التقارير</h2><p data-ar="تقارير تحليلية ومحاسبية مباشرة من البيانات." data-en="Live accounting and analytical reports.">تقارير تحليلية ومحاسبية مباشرة من البيانات.</p></div><div class="section-export-actions"><button type="button" class="soft-btn" data-section-print="reports">🖨 <span data-ar="طباعة" data-en="Print">طباعة</span></button><button type="button" class="soft-btn" data-section-excel="reports">📊 <span>Excel</span></button><button type="button" class="soft-btn" data-section-pdf="reports">📄 <span>PDF</span></button></div></div>
+      <div class="report-tabs" id="reportTabs">
+        <button class="report-tab active" data-report="trial" data-ar="ميزان المراجعة" data-en="Trial Balance">ميزان المراجعة</button>
+        <button class="report-tab" data-report="balances" data-ar="أرصدة الحسابات" data-en="Account Balances">أرصدة الحسابات</button>
+        <button class="report-tab" data-report="vat" data-ar="إقرار ضريبة القيمة المضافة" data-en="VAT Return">إقرار ضريبة القيمة المضافة</button>
+        <button class="report-tab" data-report="zakat" data-ar="إقرار الزكاة السنوي" data-en="Annual Zakat Return">إقرار الزكاة السنوي</button>
+      </div>
+      <div class="report-filters panel"><label data-ar="من تاريخ" data-en="From">من تاريخ</label><input type="date" id="repFrom"><label data-ar="إلى تاريخ" data-en="To">إلى تاريخ</label><input type="date" id="repTo"><label data-ar="المستوى" data-en="Level">المستوى</label><select id="repLevel"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select><label class="check-inline"><input type="checkbox" id="repHideZero"><span data-ar="إخفاء الأرصدة الصفرية" data-en="Hide zero balances">إخفاء الأرصدة الصفرية</span></label></div>
+      <div id="reportArea" class="panel table-panel"></div>
+    </section>
+    <section id="customers" class="view">
+      <div class="section-head"><div><span class="kicker">CUSTOMERS • SALES</span><h2 data-ar="العملاء والمبيعات" data-en="Customers & Sales">العملاء والمبيعات</h2><p data-ar="إدارة العملاء وأوامر البيع والفواتير الضريبية والتحصيل مع الربط المحاسبي." data-en="Manage customers, sales orders, tax invoices and collections with accounting links.">إدارة العملاء وأوامر البيع والفواتير الضريبية والتحصيل مع الربط المحاسبي.</p></div><div><button class="gold-btn" onclick="openCustomerModal()">＋ <span data-ar="عميل جديد" data-en="New Customer">عميل جديد</span></button> <button class="gold-btn" onclick="openSalesOrderModal()">＋ <span data-ar="أمر بيع" data-en="Sales Order">أمر بيع</span></button> <button class="gold-btn" onclick="openInvoiceModal()">＋ <span data-ar="فاتورة ضريبية" data-en="Tax Invoice">فاتورة ضريبية</span></button></div></div>
+      <div class="report-tabs" id="customerTabs"><button class="report-tab active" data-customer-tab="customers" data-ar="العملاء" data-en="Customers">العملاء</button><button class="report-tab" data-customer-tab="orders" data-ar="أوامر البيع" data-en="Sales Orders">أوامر البيع</button><button class="report-tab" data-customer-tab="invoices" data-ar="الفواتير الضريبية" data-en="Tax Invoices">الفواتير الضريبية</button><button class="report-tab" data-customer-tab="collections" data-ar="التحصيلات" data-en="Collections">التحصيلات</button></div>
+      <div id="customerArea" class="panel table-panel"></div>
+    </section>
+    <section id="invoicePage" class="view">
+      <div id="invoicePageArea"></div>
+    </section>
+    <section id="trial" class="view">
+      <div class="section-head"><div><span class="kicker">FINANCIAL REPORT</span><h2 data-ar="ميزان المراجعة" data-en="Trial Balance">ميزان المراجعة</h2><p data-ar="تجميع أرصدة الحسابات الفرعية من قيود اليومية." data-en="Aggregated balances for leaf accounts from journal entries.">تجميع أرصدة الحسابات الفرعية من قيود اليومية.</p></div><div class="section-export-actions"><button type="button" class="soft-btn" data-section-print="trial">🖨 <span data-ar="طباعة" data-en="Print">طباعة</span></button><button type="button" class="soft-btn" data-section-excel="trial">📊 <span>Excel</span></button><button type="button" class="soft-btn" data-section-pdf="trial">📄 <span>PDF</span></button></div></div>
+      <div class="report-filters panel"><label data-ar="من تاريخ" data-en="From">من تاريخ</label><input type="date" id="trialFrom"><label data-ar="إلى تاريخ" data-en="To">إلى تاريخ</label><input type="date" id="trialTo"><label data-ar="المستوى" data-en="Level">المستوى</label><select id="trialLevel"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select><label class="check-inline"><input type="checkbox" id="trialHideZero"><span data-ar="إخفاء الأرصدة الصفرية" data-en="Hide zero balances">إخفاء الأرصدة الصفرية</span></label></div>
+      <div id="trialArea" class="panel table-panel"></div>
+    </section>
+  </main>
+</div>
+
+<div id="treeContextMenu" class="tree-context-menu"></div>
+<div id="ledgerContextMenu" class="tree-context-menu ledger-context-menu"></div>
+<div class="modal-back" id="modalBack"><div class="modal" id="modal"></div></div>
+<script src="js/data.js"></script><script src="js/app.js"></script>
+</body></html>
