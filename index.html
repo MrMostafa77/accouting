@@ -23,6 +23,7 @@
       <button class="nav" data-view="statements">▦ <span data-ar="القوائم المالية" data-en="Financial Statements">القوائم المالية</span></button>
       <button class="nav" data-view="reports">▤ <span data-ar="التقارير" data-en="Reports">التقارير</span></button>
       <button class="nav" data-view="customers">♙ <span data-ar="العملاء والمبيعات" data-en="Customers & Sales">العملاء والمبيعات</span></button>
+      <button class="nav" data-view="adminDocs">▣ <span data-ar="النماذج الإدارية" data-en="Administrative Forms">النماذج الإدارية</span></button>
     </nav>
     <div class="side-bottom">
       <button id="langBtn" class="soft-btn">EN</button><button id="themeBtn" class="soft-btn">☾</button>
@@ -91,6 +92,45 @@
       </div>
       <div class="report-filters panel"><label data-ar="من تاريخ" data-en="From">من تاريخ</label><input type="date" id="repFrom"><label data-ar="إلى تاريخ" data-en="To">إلى تاريخ</label><input type="date" id="repTo"><label data-ar="المستوى" data-en="Level">المستوى</label><select id="repLevel"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select><label class="check-inline"><input type="checkbox" id="repHideZero"><span data-ar="إخفاء الأرصدة الصفرية" data-en="Hide zero balances">إخفاء الأرصدة الصفرية</span></label></div>
       <div id="reportArea" class="panel table-panel"></div>
+    </section>
+    <section id="adminDocs" class="view">
+      <div class="section-head">
+        <div><span class="kicker">HR • ADMIN FORMS</span><h2 data-ar="النماذج الإدارية والموارد البشرية" data-en="Administrative & HR Forms">النماذج الإدارية والموارد البشرية</h2><p data-ar="النماذج المرفوعة مدمجة داخل النظام وقابلة للتعديل والحفظ والطباعة." data-en="Uploaded forms are integrated into the system and can be edited, saved and printed.">النماذج المرفوعة مدمجة داخل النظام وقابلة للتعديل والحفظ والطباعة.</p></div>
+        <div class="section-export-actions"><button type="button" class="soft-btn" id="adminDocsPrint">🖨 <span data-ar="طباعة النموذج" data-en="Print Form">طباعة النموذج</span></button><button type="button" class="soft-btn" id="adminDocsReset">↺ <span data-ar="إعادة النموذج الأصلي" data-en="Reset Original">إعادة النموذج الأصلي</span></button></div>
+      </div>
+      <div class="admin-entry panel">
+        <div class="admin-entry-head"><div><h3 data-ar="بيانات الموظف" data-en="Employee Data">بيانات الموظف</h3><p data-ar="أدخل بيانات الموظف مرة واحدة، وسيتم ترحيلها تلقائياً إلى النماذج المرتبطة." data-en="Enter employee data once; it will automatically flow into the related forms.">أدخل بيانات الموظف مرة واحدة، وسيتم ترحيلها تلقائياً إلى النماذج المرتبطة.</p></div><div class="admin-entry-actions"><button type="button" class="soft-btn" id="adminSaveData">💾 <span data-ar="حفظ البيانات" data-en="Save Data">حفظ البيانات</span></button><button type="button" class="gold-btn" id="adminSavePrint">🖨 <span data-ar="حفظ وطباعة النموذج" data-en="Save & Print Form">حفظ وطباعة النموذج</span></button><button type="button" class="gold-btn" id="adminPrintAll">🖨 <span data-ar="طباعة ملف الموظف بالكامل" data-en="Print Full Employee File">طباعة ملف الموظف بالكامل</span></button></div></div>
+        <div class="admin-entry-grid">
+          <label><span>اسم الموظف</span><input data-employee-key="name" placeholder="اسم الموظف"></label>
+          <label><span>رقم الهوية</span><input data-employee-key="id" placeholder="رقم الهوية"></label>
+          <label><span>رقم الجوال</span><input data-employee-key="mobile" placeholder="05xxxxxxxx"></label>
+          <label><span>العنوان</span><input data-employee-key="address" value="مكه المكرمه"></label>
+          <label><span>المسمى الوظيفي</span><input data-employee-key="job" value="حارس أمن"></label>
+          <label><span>موقع العمل</span><input data-employee-key="site" placeholder="الموقع"></label>
+          <label><span>تاريخ العقد</span><input type="date" data-employee-key="contractDate"></label>
+          <label><span>تاريخ المباشرة</span><input type="date" data-employee-key="startDate"></label>
+          <label><span>الراتب الأساسي</span><input type="number" data-employee-key="basicSalary" value="1500"></label>
+          <label><span>بدل السكن</span><input type="number" data-employee-key="housing" value="500"></label>
+          <label><span>بدلات أخرى</span><input type="number" data-employee-key="otherAllowance" value="1000"></label>
+          <label><span>إجمالي الراتب</span><input type="number" data-employee-key="totalSalary" value="3000"></label>
+          <label><span>البنك</span><input data-employee-key="bank"></label>
+          <label><span>رقم الحساب</span><input data-employee-key="account"></label>
+          <label class="wide"><span>رقم الآيبان</span><input data-employee-key="iban"></label>
+        </div>
+      </div>
+      <div class="admin-doc-toolbar panel">
+        <label data-ar="اختر النموذج" data-en="Choose form">اختر النموذج</label>
+        <select id="adminDocSelect">
+          <option value="iban" data-ar="نموذج تفويض آيبان" data-en="IBAN Salary Authorization">نموذج تفويض آيبان</option>
+          <option value="contract" data-ar="عقد العمل" data-en="Employment Contract">عقد العمل</option>
+          <option value="penalties" data-ar="لائحة الجزاءات الإدارية" data-en="Administrative Penalties Policy">لائحة الجزاءات الإدارية</option>
+          <option value="directWork" data-ar="مباشرة عمل الموظف" data-en="Employee Work Commencement">مباشرة عمل الموظف</option>
+          <option value="medical" data-ar="استمارة كشف طبي" data-en="Medical Examination Form">استمارة كشف طبي</option>
+          <option value="uniform" data-ar="تعهد استلام بدلة" data-en="Uniform Receipt Undertaking">تعهد استلام بدلة</option>
+        </select>
+        <span class="admin-doc-hint" data-ar="يمكن تعديل النص والخانات مباشرة ثم الضغط على طباعة." data-en="Edit text and fields directly, then press Print.">يمكن تعديل النص والخانات مباشرة ثم الضغط على طباعة.</span>
+      </div>
+      <div id="adminDocArea" class="admin-doc-area"></div>
     </section>
     <section id="customers" class="view">
       <div class="section-head"><div><span class="kicker">CUSTOMERS • SALES</span><h2 data-ar="العملاء والمبيعات" data-en="Customers & Sales">العملاء والمبيعات</h2><p data-ar="إدارة العملاء وأوامر البيع والفواتير الضريبية والتحصيل مع الربط المحاسبي." data-en="Manage customers, sales orders, tax invoices and collections with accounting links.">إدارة العملاء وأوامر البيع والفواتير الضريبية والتحصيل مع الربط المحاسبي.</p></div><div><button class="gold-btn" onclick="openCustomerModal()">＋ <span data-ar="عميل جديد" data-en="New Customer">عميل جديد</span></button> <button class="gold-btn" onclick="openSalesOrderModal()">＋ <span data-ar="أمر بيع" data-en="Sales Order">أمر بيع</span></button> <button class="gold-btn" onclick="openInvoiceModal()">＋ <span data-ar="فاتورة ضريبية" data-en="Tax Invoice">فاتورة ضريبية</span></button></div></div>
