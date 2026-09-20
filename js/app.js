@@ -126,7 +126,12 @@ function applyLang(){
 }
 function openView(v){
  currentView=v;$$(".view").forEach(x=>x.classList.toggle("active",x.id===v));$$(".nav").forEach(x=>x.classList.toggle("active",x.dataset.view===v));
- $("#title").textContent={home:arEn("لوحة التحكم","Dashboard"),tree:arEn("شجرة الحسابات","Chart of Accounts"),journal:arEn("قيود اليومية","Journal Entries"),ledger:arEn("الأستاذ العام","General Ledger"),trial:arEn("ميزان المراجعة","Trial Balance"),statements:arEn("القوائم المالية","Financial Statements"),reports:arEn("التقارير","Reports"),customers:arEn("العملاء والمبيعات","Customers & Sales"),adminAffairs:arEn("الشئون الإدارية","Administrative Affairs"),adminDocs:arEn("النماذج الإدارية","Administrative Forms"),invoicePage:arEn("فاتورة ضريبية","Tax Invoice")}[v];
+ const financialViews=["tree","journal","ledger","trial","statements","reports"];
+ if(financialViews.includes(v)){
+   const parent=$("#financialAffairsNav"); if(parent)parent.classList.add("active");
+   const sub=$("#financialAffairsSubnav"); if(sub){sub.classList.add("show");sub.setAttribute("aria-hidden","false");}
+ } else if(v!=="home") { window.toggleFinancialSub?.(false); }
+ $("#title").textContent={home:arEn("لوحة التحكم","Dashboard"),tree:arEn("شجرة الحسابات","Chart of Accounts"),journal:arEn("قيود اليومية","Journal Entries"),ledger:arEn("الأستاذ العام","General Ledger"),trial:arEn("ميزان المراجعة","Trial Balance"),statements:arEn("القوائم المالية","Financial Statements"),reports:arEn("التقارير المالية","Financial Reports"),customers:arEn("العملاء والمبيعات","Customers & Sales"),adminAffairs:arEn("الشئون الإدارية","Administrative Affairs"),adminDocs:arEn("النماذج الإدارية","Administrative Forms"),invoicePage:arEn("فاتورة ضريبية","Tax Invoice")}[v];
  if(v==="home")renderHome(); if(v==="tree")renderTree(); if(v==="journal")renderJournal(); if(v==="ledger")renderLedger(); if(v==="trial")renderTrial(); if(v==="statements")renderStatements(); if(v==="reports")renderReports(); if(v==="customers")renderCustomers(); if(v==="adminAffairs")window.renderAdminAffairs?.();
 }
 window.openView=openView;window.arEn=arEn;window.applyLang=applyLang;window.showToast=m=>toast(m);
@@ -1114,6 +1119,15 @@ function exportInvoiceExcel(id){
 function orderForm(id){const o=id&&db.salesOrders.find(x=>x.id===id);return `<h3>${arEn('أمر بيع','Sales Order')}</h3><div class="form-grid"><div class="field"><label>${arEn('العميل','Customer')}</label><select id="oCustomer">${customerOptions()}</select></div><div class="field"><label>${arEn('التاريخ','Date')}</label><input type="date" id="oDate" value="${o?.date||new Date().toISOString().slice(0,10)}"></div><div class="field"><label>${arEn('القيمة','Order amount')}</label><input id="oTotal" type="number" step="0.01" value="${o?.total||''}"></div><div class="field"><label>${arEn('البيان','Description')}</label><input id="oDesc" value="${esc(o?.desc||'أمر بيع')}"></div></div><div class="modal-foot"><button class="gold-btn" id="saveOrder">${arEn('حفظ أمر البيع','Save Order')}</button><button class="soft-btn" onclick="closeModal()">${arEn('إلغاء','Cancel')}</button></div>`}
 window.openSalesOrderModal=id=>{if(!db.customers.length){toast(arEn('أضف عميلاً أولاً','Add a customer first'));return}const m=$("#modal");m.innerHTML=orderForm(id);$("#modalBack").classList.add('show');if(id)$("#oCustomer").value=db.salesOrders.find(x=>x.id===id)?.customerId||'';$("#saveOrder").onclick=()=>{const cid=$("#oCustomer").value,total=Number($("#oTotal").value||0);if(!cid||total<=0)return toast(arEn('أدخل البيانات المطلوبة','Enter required data'));let o=id&&db.salesOrders.find(x=>x.id===id);if(!o){o={id:nextId('SO-',db.salesOrders)};db.salesOrders.push(o)}Object.assign(o,{customerId:cid,date:$("#oDate").value,total,desc:$("#oDesc").value});save();closeModal();renderCustomers();toast(arEn('تم حفظ أمر البيع','Sales order saved'))}}
 window.openCollectionModal=invoiceId=>{const inv=db.invoices.find(x=>x.id===invoiceId),paid=db.collections.filter(x=>x.invoiceId===invoiceId).reduce((s,x)=>s+x.amount,0),due=Math.max(0,r2(inv.total-paid));const m=$("#modal");m.innerHTML=`<h3>${arEn('تسديد من داخل الفاتورة','Payment from Invoice')}</h3><div class="form-grid"><div class="field"><label>${arEn('الفاتورة','Invoice')}</label><input value="${esc(inv.id)} — ${fmt(inv.total)} SAR" disabled></div><div class="field"><label>${arEn('المتبقي','Remaining')}</label><input value="${fmt(due)} SAR" disabled></div><div class="field"><label>${arEn('مبلغ التسديد','Payment amount')}</label><input id="payAmount" type="number" max="${due}" step="0.01"></div><div class="field"><label>${arEn('تاريخ السداد','Payment date')}</label><input id="payDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div class="field"><label>${arEn('حساب التحصيل','Collection account')}</label><select id="payAccount">${db.accounts.filter(a=>isLeaf(a)&&String(a.code).startsWith('121')&&/خزين|نقد|بنك|bank|cash/i.test(a.name||'')).map(a=>`<option value="${a.code}">${a.code} — ${esc(a.name)}</option>`).join('')}</select></div></div><div class="modal-foot"><button class="gold-btn" id="savePayment">${arEn('تسجيل السداد','Record Payment')}</button><button class="soft-btn" onclick="closeModal()">${arEn('إلغاء','Cancel')}</button></div>`;$("#modalBack").classList.add('show');$("#savePayment").onclick=()=>{const amount=r2($("#payAmount").value||0),code=Number($("#payAccount").value);if(amount<=0||amount>due+0.005)return toast(arEn('مبلغ غير صحيح','Invalid amount'));const ac=db.accounts.find(a=>Number(a.code)===code);const entry=Math.max(0,...db.journal.map(x=>Number(x.entry)||0))+1,date=($("#payDate")?.value)||new Date().toISOString().slice(0,10);const r={id:nextId('PAY-',db.collections),invoiceId:inv.id,customerId:inv.customerId,date,amount,accountCode:code,journalEntry:entry};db.collections.push(r);const cust=db.customers.find(c=>c.id===inv.customerId);db.journal.push({date,month:date.slice(0,7),type:'تحصيل عميل',entry,search:`${code}- ${ac?.name||''}`,code,a1:ac?.name||'',a2:'',a3:'',a4:'',a5:ac?.name||'',debit:amount,credit:0,balance:amount,desc:`تحصيل ${inv.id}`,invoice:inv.id});db.journal.push({date,month:date.slice(0,7),type:'تحصيل عميل',entry,search:`${cust.accountCode}- ${cust.name}`,code:cust.accountCode,a1:cust.name,a2:'',a3:'',a4:'',a5:cust.name,debit:0,credit:amount,balance:-amount,desc:`تحصيل ${inv.id}`,invoice:inv.id});save();closeModal();renderCustomers();renderHome();toast(arEn('تم تسجيل السداد وربطه بالقيد','Payment recorded and linked to journal'))}}
+function toggleFinancialSub(open){
+ const s=$("#financialAffairsSubnav"),n=$("#financialAffairsNav");
+ if(!s||!n)return;
+ s.classList.toggle("show",open??!s.classList.contains("show"));
+ s.setAttribute("aria-hidden",String(!s.classList.contains("show")));
+ n.classList.toggle("expanded",s.classList.contains("show"));
+}
+window.toggleFinancialSub=toggleFinancialSub;
+
 function init(){
  document.addEventListener('click',e=>{
   const p=e.target.closest('[data-section-print],[data-section-excel],[data-section-pdf]'); if(!p)return;
@@ -1124,7 +1138,19 @@ function init(){
   exportWholeReport(area,mode);
  });
  $("#modalBack").addEventListener("click",e=>{if(e.target.id==="modalBack")closeModal()});
- $$(".nav").forEach(n=>n.onclick=()=>openView(n.dataset.view));
+ $$(".nav").forEach(n=>n.onclick=()=>{
+   if(n.dataset.view==="financialAffairs"){
+     toggleFinancialSub(true);
+     openView("tree");
+     return;
+   }
+   openView(n.dataset.view);
+ });
+ $$("#financialAffairsSubnav [data-financial-module]").forEach(b=>b.addEventListener("click",e=>{
+   e.preventDefault();e.stopPropagation();toggleFinancialSub(true);openView(b.dataset.financialModule);
+   $$("#financialAffairsSubnav [data-financial-module]").forEach(x=>x.classList.toggle("active",x===b));
+ }));
+ $$(".nav:not(#financialAffairsNav)").forEach(b=>b.addEventListener("click",()=>toggleFinancialSub(false)));
  $("#treeRoot").addEventListener("click",e=>{const line=e.target.closest(".node-line");if(!line)return;const code=line.dataset.code;const kids=childrenOf(code);if(kids.length){expanded.has(code)?expanded.delete(code):expanded.add(code);renderTree()}showAccount(code)});
  $("#treeRoot").addEventListener("contextmenu",e=>{const line=e.target.closest(".node-line");if(!line)return;e.preventDefault();showTreeContextMenu(line.dataset.code,e.clientX,e.clientY)});
  document.addEventListener("click",e=>{if(!e.target.closest("#treeContextMenu"))hideContextMenu()});
@@ -1370,7 +1396,7 @@ function empGet(){const o={...employeeDefaults};Object.keys(o).forEach(k=>{const
  document.addEventListener('DOMContentLoaded',()=>{
    const nav=q('adminAffairsNav');
    if(nav)nav.addEventListener('click',()=>{toggleSub(true);setModule(active);});
-   document.querySelectorAll('.nav:not(#adminAffairsNav)').forEach(b=>b.addEventListener('click',()=>toggleSub(false)));
+   document.querySelectorAll('.nav:not(#adminAffairsNav):not(#financialAffairsNav)').forEach(b=>b.addEventListener('click',()=>toggleSub(false)));
    document.querySelectorAll('#adminAffairsSubnav [data-admin-module], #adminAffairs .admin-flow-step').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();toggleSub(true);setModule(b.dataset.adminModule)}));
    document.addEventListener('click',e=>{const del=e.target.closest('.admin-delete');if(!del)return;const kind=del.dataset.adminDelete,id=del.dataset.id;if(!A[kind])return;if(!confirm('هل تريد حذف هذا السجل؟'))return;A[kind]=A[kind].filter(x=>x.id!==id);if(kind==='departments')A.positions=A.positions.filter(x=>x.departmentId!==id);if(kind==='employees'){A.contracts=A.contracts.filter(x=>x.employeeId!==id);A.attendance=A.attendance.filter(x=>x.employeeId!==id);A.leaveRequests=A.leaveRequests.filter(x=>x.employeeId!==id)}save();renders[active]?.();toast('تم الحذف')});
    if(q('adminAffairs')){setModule('companies')}

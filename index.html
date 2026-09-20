@@ -16,12 +16,15 @@
     <div class="company-box"><small data-ar="النظام المحاسبي" data-en="Accounting System">النظام المحاسبي</small><strong>MOSTAFA MYTH</strong><em>LIVE • FIREBASE CLOUD</em></div>
     <nav>
       <button class="nav active" data-view="home">⌂ <span data-ar="الرئيسية" data-en="Dashboard">الرئيسية</span></button>
-      <button class="nav" data-view="tree">⌘ <span data-ar="شجرة الحسابات" data-en="Chart of Accounts">شجرة الحسابات</span></button>
-      <button class="nav" data-view="journal">▤ <span data-ar="قيود اليومية" data-en="Journal Entries">قيود اليومية</span></button>
-      <button class="nav" data-view="ledger">▥ <span data-ar="الأستاذ العام" data-en="General Ledger">الأستاذ العام</span></button>
-      <button class="nav" data-view="trial">◫ <span data-ar="ميزان المراجعة" data-en="Trial Balance">ميزان المراجعة</span></button>
-      <button class="nav" data-view="statements">▦ <span data-ar="القوائم المالية" data-en="Financial Statements">القوائم المالية</span></button>
-      <button class="nav" data-view="reports">▤ <span data-ar="التقارير" data-en="Reports">التقارير</span></button>
+      <button class="nav financial-parent" id="financialAffairsNav" data-view="financialAffairs">▣ <span data-ar="الشئون المالية" data-en="Financial Affairs">الشئون المالية</span><b class="financial-chevron">⌄</b></button>
+      <div id="financialAffairsSubnav" class="financial-subnav" aria-hidden="true">
+        <button data-financial-module="tree">1. شجرة الحسابات</button>
+        <button data-financial-module="journal">2. قيود اليومية</button>
+        <button data-financial-module="ledger">3. الأستاذ العام</button>
+        <button data-financial-module="trial">4. ميزان المراجعة</button>
+        <button data-financial-module="statements">5. القوائم المالية</button>
+        <button data-financial-module="reports">6. التقارير المالية</button>
+      </div>
       <button class="nav" data-view="customers">♙ <span data-ar="العملاء والمبيعات" data-en="Customers & Sales">العملاء والمبيعات</span></button>
       <button class="nav admin-parent" id="adminAffairsNav" data-view="adminAffairs">▣ <span data-ar="الشئون الإدارية" data-en="Administrative Affairs">الشئون الإدارية</span><b class="admin-chevron">⌄</b></button>
       <div id="adminAffairsSubnav" class="admin-subnav" aria-hidden="true">
@@ -99,7 +102,7 @@
       <div id="statementArea" class="panel table-panel"></div>
     </section>
     <section id="reports" class="view">
-      <div class="section-head"><div><span class="kicker">REPORTS</span><h2 data-ar="التقارير" data-en="Reports">التقارير</h2><p data-ar="تقارير تحليلية ومحاسبية مباشرة من البيانات." data-en="Live accounting and analytical reports.">تقارير تحليلية ومحاسبية مباشرة من البيانات.</p></div><div class="section-export-actions"><button type="button" class="soft-btn" data-section-print="reports">🖨 <span data-ar="طباعة" data-en="Print">طباعة</span></button><button type="button" class="soft-btn" data-section-excel="reports">📊 <span>Excel</span></button><button type="button" class="soft-btn" data-section-pdf="reports">📄 <span>PDF</span></button></div></div>
+      <div class="section-head"><div><span class="kicker">REPORTS</span><h2 data-ar="التقارير المالية" data-en="Financial Reports">التقارير المالية</h2><p data-ar="تقارير تحليلية ومحاسبية مباشرة من البيانات." data-en="Live accounting and analytical reports.">تقارير تحليلية ومحاسبية مباشرة من البيانات.</p></div><div class="section-export-actions"><button type="button" class="soft-btn" data-section-print="reports">🖨 <span data-ar="طباعة" data-en="Print">طباعة</span></button><button type="button" class="soft-btn" data-section-excel="reports">📊 <span>Excel</span></button><button type="button" class="soft-btn" data-section-pdf="reports">📄 <span>PDF</span></button></div></div>
       <div class="report-tabs" id="reportTabs">
         <button class="report-tab active" data-report="trial" data-ar="ميزان المراجعة" data-en="Trial Balance">ميزان المراجعة</button>
         <button class="report-tab" data-report="balances" data-ar="أرصدة الحسابات" data-en="Account Balances">أرصدة الحسابات</button>
