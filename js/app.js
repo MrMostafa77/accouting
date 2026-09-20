@@ -47,9 +47,10 @@ async function hydrateFromFirestore(){
       db.invoices=Array.isArray(cloud.invoices)?cloud.invoices.map(x=>({...x})):[];
       db.collections=Array.isArray(cloud.collections)?cloud.collections.map(x=>({...x})):[];
       cloudStamp=cloud.updatedAt||null;
+      window.__adminCloudSeed=cloud.adminAffairs||null;
       return true;
     }
-    const seed={accounts:db.accounts,journal:db.journal,customers:db.customers,salesOrders:db.salesOrders,invoices:db.invoices,collections:db.collections,createdBy:firebaseUser.uid,createdAt:new Date().toISOString()};
+    const seed={accounts:db.accounts,journal:db.journal,customers:db.customers,salesOrders:db.salesOrders,invoices:db.invoices,collections:db.collections,adminAffairs:window.__adminCloudSeed||null,createdBy:firebaseUser.uid,createdAt:new Date().toISOString()};
     seed.updatedAt=seed.createdAt;
     await FB.setDoc(CLOUD_DOC,seed); cloudStamp=seed.updatedAt;
     return true;
@@ -72,6 +73,26 @@ await hydrateFromFirestore();
  db.journal.forEach(x=>{const n=Number(x.code); if(map.has(n)) x.code=map.get(n); if(map.has(Number(x.code))) x.code=map.get(Number(x.code));});
 })();
 db.customers=db.customers||[];db.salesOrders=db.salesOrders||[];db.invoices=db.invoices||[];db.collections=db.collections||[];
+// Real-time Firestore synchronization: every connected user receives committed changes instantly.
+if(!window.__realtimeSyncStarted){
+  window.__realtimeSyncStarted=true;
+  FB.onSnapshot(CLOUD_DOC,(snap)=>{
+    if(!snap.exists()) return;
+    const cloud=snap.data();
+    const incomingStamp=cloud.updatedAt||null;
+    if(!incomingStamp || incomingStamp===cloudStamp) return;
+    db.accounts=Array.isArray(cloud.accounts)?cloud.accounts.map(x=>({...x})):[];
+    db.journal=Array.isArray(cloud.journal)?cloud.journal.map(x=>({...x})):[];
+    db.customers=Array.isArray(cloud.customers)?cloud.customers.map(x=>({...x})):[];
+    db.salesOrders=Array.isArray(cloud.salesOrders)?cloud.salesOrders.map(x=>({...x})):[];
+    db.invoices=Array.isArray(cloud.invoices)?cloud.invoices.map(x=>({...x})):[];
+    db.collections=Array.isArray(cloud.collections)?cloud.collections.map(x=>({...x})):[];
+    cloudStamp=incomingStamp;
+    try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}
+    if(cloud.adminAffairs) window.__adminApplyCloud?.(cloud.adminAffairs);
+    if(typeof window.refreshRealtimeUI==='function') window.refreshRealtimeUI();
+  },(err)=>console.error('Firestore realtime listener failed:',err));
+}
 let currentCustomerTab="customers";
 let expanded=new Set(), selected=null, currentView="home", journalEditId=null, currentJournalEntry=null;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -103,7 +124,7 @@ function showConflict(){
 }
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify(db));}catch(err){console.warn('Local cache unavailable',err);}
-  const payload={accounts:db.accounts,journal:db.journal,customers:db.customers||[],salesOrders:db.salesOrders||[],invoices:db.invoices||[],collections:db.collections||[],updatedBy:firebaseUser.uid,updatedAt:new Date().toISOString()};
+  const payload={accounts:db.accounts,journal:db.journal,customers:db.customers||[],salesOrders:db.salesOrders||[],invoices:db.invoices||[],collections:db.collections||[],adminAffairs:(typeof window.__adminGetState==='function'?window.__adminGetState():window.__adminCloudSeed||null),updatedBy:firebaseUser.uid,updatedAt:new Date().toISOString()};
   // A single Firestore document is capped at 1 MiB — warn early, refuse before a silent failure.
   const bytes=new TextEncoder().encode(JSON.stringify(payload)).length;
   if(bytes>1000000){toast(arEn("حجم البيانات وصل حد قاعدة البيانات (1 ميجا). لم يتم الحفظ — خذ نسخة احتياطية وتواصل لتقسيم البيانات.","Data reached the database size limit (1 MB). Not saved — take a backup and split the data."));return false;}
@@ -117,6 +138,7 @@ function save(){
   }).catch(err=>{console.error('Firestore save failed:',err);toast(arEn('فشل حفظ البيانات سحابياً — لم يتم اعتماد التعديل','Cloud save failed — change was not committed'));});
   return true;
 }
+window.saveCloud=save;
 function toast(m){$("#toast").textContent=m;$("#toast").classList.add("show");clearTimeout(window.__tt);window.__tt=setTimeout(()=>$("#toast").classList.remove("show"),2300)}
 function applyLang(){
  document.documentElement.lang=db.lang;document.documentElement.dir=db.lang==="ar"?"rtl":"ltr";
@@ -135,6 +157,10 @@ function openView(v){
  if(v==="home")renderHome(); if(v==="tree")renderTree(); if(v==="journal")renderJournal(); if(v==="ledger")renderLedger(); if(v==="trial")renderTrial(); if(v==="statements")renderStatements(); if(v==="reports")renderReports(); if(v==="customers")renderCustomers(); if(v==="adminAffairs")window.renderAdminAffairs?.();
 }
 window.openView=openView;window.arEn=arEn;window.applyLang=applyLang;window.showToast=m=>toast(m);
+window.refreshRealtimeUI=()=>{
+  try{fillAccountSelects();}catch(e){}
+  try{if(currentView==='home')renderHome(); else if(currentView==='tree')renderTree(); else if(currentView==='journal')renderJournal(); else if(currentView==='ledger')renderLedger(); else if(currentView==='trial')renderTrial(); else if(currentView==='statements')renderStatements(); else if(currentView==='reports')renderReports(); else if(currentView==='customers')renderCustomers(); else if(currentView==='adminAffairs')window.renderAdminAffairs?.();}catch(e){console.warn('Realtime UI refresh failed',e)}
+};
 function accountMap(){return new Map(db.accounts.map(a=>[String(a.code),a]))}
 function parentCode(code){
  const s=String(code);
@@ -1305,9 +1331,11 @@ function empGet(){const o={...employeeDefaults};Object.keys(o).forEach(k=>{const
   companies:[], departments:[], positions:[], shifts:[{id:'shift-default',name:'الوردية الأساسية',start:'08:00',end:'17:00',fridayOff:true,saturdayOff:true}],
   leaveTypes:[{id:'leave-annual',name:'إجازة سنوية',days:30,paid:true}], employees:[], contracts:[], attendance:[], leaveRequests:[], payroll:[]
  };
- function load(){try{return {...seed,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch(e){return JSON.parse(JSON.stringify(seed))}}
+ function load(){try{return {...seed,...JSON.parse(localStorage.getItem(KEY)||'{}'),...(window.__adminCloudSeed||{})}}catch(e){return {...seed,...(window.__adminCloudSeed||{})}}}
  let A=load();
- const save=()=>{localStorage.setItem(KEY,JSON.stringify(A))};
+ const save=()=>{localStorage.setItem(KEY,JSON.stringify(A)); if(typeof window.saveCloud==='function') window.saveCloud()};
+ window.__adminGetState=()=>JSON.parse(JSON.stringify(A));
+ window.__adminApplyCloud=(incoming)=>{ if(!incoming)return; A={...seed,...incoming}; try{localStorage.setItem(KEY,JSON.stringify(A))}catch(e){}; renders[active]?.(); }; 
  const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
  const q=id=>document.getElementById(id);
  const escA=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
