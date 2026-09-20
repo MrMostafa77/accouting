@@ -23,6 +23,18 @@
       <button class="nav" data-view="statements">▦ <span data-ar="القوائم المالية" data-en="Financial Statements">القوائم المالية</span></button>
       <button class="nav" data-view="reports">▤ <span data-ar="التقارير" data-en="Reports">التقارير</span></button>
       <button class="nav" data-view="customers">♙ <span data-ar="العملاء والمبيعات" data-en="Customers & Sales">العملاء والمبيعات</span></button>
+      <button class="nav admin-parent" id="adminAffairsNav" data-view="adminAffairs">▣ <span data-ar="الشئون الإدارية" data-en="Administrative Affairs">الشئون الإدارية</span><b class="admin-chevron">⌄</b></button>
+      <div id="adminAffairsSubnav" class="admin-subnav" aria-hidden="true">
+        <button data-admin-module="companies">1. الشركات</button>
+        <button data-admin-module="departments">2. الأقسام + المسميات</button>
+        <button data-admin-module="shifts">3. الورديات (8-5، جمعة+سبت إجازة)</button>
+        <button data-admin-module="leaveTypes">4. أنواع الإجازات (30 يوم سنوية)</button>
+        <button data-admin-module="employees">5. الموظفين</button>
+        <button data-admin-module="contracts">6. العقود</button>
+        <button data-admin-module="attendance">7. الحضور</button>
+        <button data-admin-module="leaveRequests">8. طلبات الإجازات</button>
+        <button data-admin-module="payroll">9. الرواتب</button>
+      </div>
       <button class="nav" data-view="adminDocs">▣ <span data-ar="النماذج الإدارية" data-en="Administrative Forms">النماذج الإدارية</span></button>
     </nav>
     <div class="firebase-user-bar" id="firebaseUserBar">
@@ -96,6 +108,25 @@
       </div>
       <div class="report-filters panel"><label data-ar="من تاريخ" data-en="From">من تاريخ</label><input type="date" id="repFrom"><label data-ar="إلى تاريخ" data-en="To">إلى تاريخ</label><input type="date" id="repTo"><label data-ar="المستوى" data-en="Level">المستوى</label><select id="repLevel"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option></select><label class="check-inline"><input type="checkbox" id="repHideZero"><span data-ar="إخفاء الأرصدة الصفرية" data-en="Hide zero balances">إخفاء الأرصدة الصفرية</span></label></div>
       <div id="reportArea" class="panel table-panel"></div>
+    </section>
+    <section id="adminAffairs" class="view">
+      <div class="section-head">
+        <div><span class="kicker">ADMINISTRATIVE AFFAIRS</span><h2 data-ar="الشئون الإدارية" data-en="Administrative Affairs">الشئون الإدارية</h2><p data-ar="إدارة الشركات والموظفين والدوام والإجازات والعقود والرواتب في مسار مترابط." data-en="Manage companies, employees, schedules, leave, contracts and payroll in one linked workflow.">إدارة الشركات والموظفين والدوام والإجازات والعقود والرواتب في مسار مترابط.</p></div>
+      </div>
+      <div class="admin-flow panel">
+        <div class="admin-flow-track">
+          <button class="admin-flow-step active" data-admin-module="companies"><span>1</span><b>الشركات</b></button><i>↓</i>
+          <button class="admin-flow-step" data-admin-module="departments"><span>2</span><b>الأقسام + المسميات</b></button><i>↓</i>
+          <button class="admin-flow-step" data-admin-module="shifts"><span>3</span><b>الورديات</b></button><i>↓</i>
+          <button class="admin-flow-step" data-admin-module="leaveTypes"><span>4</span><b>أنواع الإجازات</b></button><i>↓</i>
+          <button class="admin-flow-step" data-admin-module="employees"><span>5</span><b>الموظفين</b></button><i>↓</i>
+          <button class="admin-flow-step" data-admin-module="contracts"><span>6</span><b>العقود</b></button><i>↓</i>
+          <button class="admin-flow-step" data-admin-module="attendance"><span>7</span><b>الحضور</b></button><i>↓</i>
+          <button class="admin-flow-step" data-admin-module="leaveRequests"><span>8</span><b>طلبات الإجازات</b></button><i>↓</i>
+          <button class="admin-flow-step" data-admin-module="payroll"><span>9</span><b>الرواتب</b></button>
+        </div>
+      </div>
+      <div id="adminAffairsArea"></div>
     </section>
     <section id="adminDocs" class="view">
       <div class="section-head">

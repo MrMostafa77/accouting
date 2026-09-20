@@ -126,8 +126,8 @@ function applyLang(){
 }
 function openView(v){
  currentView=v;$$(".view").forEach(x=>x.classList.toggle("active",x.id===v));$$(".nav").forEach(x=>x.classList.toggle("active",x.dataset.view===v));
- $("#title").textContent={home:arEn("لوحة التحكم","Dashboard"),tree:arEn("شجرة الحسابات","Chart of Accounts"),journal:arEn("قيود اليومية","Journal Entries"),ledger:arEn("الأستاذ العام","General Ledger"),trial:arEn("ميزان المراجعة","Trial Balance"),statements:arEn("القوائم المالية","Financial Statements"),reports:arEn("التقارير","Reports"),customers:arEn("العملاء والمبيعات","Customers & Sales"),invoicePage:arEn("فاتورة ضريبية","Tax Invoice")}[v];
- if(v==="home")renderHome(); if(v==="tree")renderTree(); if(v==="journal")renderJournal(); if(v==="ledger")renderLedger(); if(v==="trial")renderTrial(); if(v==="statements")renderStatements(); if(v==="reports")renderReports(); if(v==="customers")renderCustomers();
+ $("#title").textContent={home:arEn("لوحة التحكم","Dashboard"),tree:arEn("شجرة الحسابات","Chart of Accounts"),journal:arEn("قيود اليومية","Journal Entries"),ledger:arEn("الأستاذ العام","General Ledger"),trial:arEn("ميزان المراجعة","Trial Balance"),statements:arEn("القوائم المالية","Financial Statements"),reports:arEn("التقارير","Reports"),customers:arEn("العملاء والمبيعات","Customers & Sales"),adminAffairs:arEn("الشئون الإدارية","Administrative Affairs"),adminDocs:arEn("النماذج الإدارية","Administrative Forms"),invoicePage:arEn("فاتورة ضريبية","Tax Invoice")}[v];
+ if(v==="home")renderHome(); if(v==="tree")renderTree(); if(v==="journal")renderJournal(); if(v==="ledger")renderLedger(); if(v==="trial")renderTrial(); if(v==="statements")renderStatements(); if(v==="reports")renderReports(); if(v==="customers")renderCustomers(); if(v==="adminAffairs")window.renderAdminAffairs?.();
 }
 window.openView=openView;window.arEn=arEn;window.applyLang=applyLang;window.showToast=m=>toast(m);
 function accountMap(){return new Map(db.accounts.map(a=>[String(a.code),a]))}
@@ -1270,4 +1270,111 @@ function empGet(){const o={...employeeDefaults};Object.keys(o).forEach(k=>{const
  window.renderAdminDocs=render;
  document.addEventListener('DOMContentLoaded',()=>{loadEmpPanel();['basicSalary','housing','otherAllowance'].forEach(k=>document.querySelector('[data-employee-key="'+k+'"]')?.addEventListener('input',()=>{const g=x=>Number(document.querySelector('[data-employee-key="'+x+'"]')?.value||0);const t=document.querySelector('[data-employee-key="totalSalary"]');if(t)t.value=g('basicSalary')+g('housing')+g('otherAllowance');}));document.querySelectorAll('[data-employee-key]').forEach(el=>el.addEventListener('input',()=>{syncEmployeeToCurrentForm()}));select()?.addEventListener('change',()=>{saveDoc();render()});document.querySelector('#adminSaveData')?.addEventListener('click',()=>{empSave();syncEmployeeToCurrentForm();render()});document.querySelector('#adminSavePrint')?.addEventListener('click',()=>{empSave();saveDoc();window.print()});document.querySelector('#adminPrintAll')?.addEventListener('click',()=>{empSave();renderPrintAll()});document.querySelector('#adminDocsPrint')?.addEventListener('click',()=>{saveDoc();window.print()});document.querySelector('#adminDocsReset')?.addEventListener('click',()=>{const s=select()?.value;if(!s)return;if(confirm(arEn('سيتم مسح التعديلات المحفوظة لهذا النموذج وإعادته للأصل. هل تريد المتابعة؟','Saved edits for this form will be cleared. Continue?'))){area()?.querySelectorAll('[data-doc-key]').forEach(el=>localStorage.removeItem('admin-doc-'+s+'-'+el.dataset.docKey));render()}});if(select())render()});
  document.addEventListener('click',e=>{if(e.target.closest('.nav[data-view="adminDocs"]'))setTimeout(render,0)});
+})();
+
+/* 2026-0024: Administrative Affairs workflow */
+(function(){
+ const KEY='ma-admin-affairs-v1';
+ const seed={
+  companies:[], departments:[], positions:[], shifts:[{id:'shift-default',name:'الوردية الأساسية',start:'08:00',end:'17:00',fridayOff:true,saturdayOff:true}],
+  leaveTypes:[{id:'leave-annual',name:'إجازة سنوية',days:30,paid:true}], employees:[], contracts:[], attendance:[], leaveRequests:[], payroll:[]
+ };
+ function load(){try{return {...seed,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch(e){return JSON.parse(JSON.stringify(seed))}}
+ let A=load();
+ const save=()=>{localStorage.setItem(KEY,JSON.stringify(A))};
+ const uid=p=>p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);
+ const q=id=>document.getElementById(id);
+ const escA=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+ const next=(name)=>({companies:'departments',departments:'shifts',shifts:'leaveTypes',leaveTypes:'employees',employees:'contracts',contracts:'attendance',attendance:'leaveRequests',leaveRequests:'payroll'}[name]);
+ const labels={companies:'الشركات',departments:'الأقسام + المسميات',shifts:'الورديات',leaveTypes:'أنواع الإجازات',employees:'الموظفين',contracts:'العقود',attendance:'الحضور',leaveRequests:'طلبات الإجازات',payroll:'الرواتب'};
+ function opts(arr,placeholder='اختر'){return `<option value="">${placeholder}</option>`+arr.map(x=>`<option value="${escA(x.id)}">${escA(x.name||x.title||x.id)}</option>`).join('')}
+ function employeeOpts(){return opts(A.employees,'اختر الموظف')}
+ function companyOpts(){return opts(A.companies,'اختر الشركة')}
+ function deptOpts(){return opts(A.departments,'اختر القسم')}
+ function positionOpts(){return opts(A.positions,'اختر المسمى')}
+ function shiftOpts(){return opts(A.shifts,'اختر الوردية')}
+ function leaveOpts(){return opts(A.leaveTypes,'اختر نوع الإجازة')}
+ function dateNow(){return new Date().toISOString().slice(0,10)}
+ function daysInMonth(v){const d=v?new Date(v+'-01T00:00:00'):new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).getDate()}
+ function monthKey(){return new Date().toISOString().slice(0,7)}
+ function shell(title,sub,body){return `<div class="section-head admin-module-head"><div><span class="kicker">ADMINISTRATIVE AFFAIRS</span><h2>${title}</h2><p>${sub}</p></div></div><div class="admin-module panel">${body}</div>`}
+ function formRow(fields,actions=''){return `<div class="admin-form-grid">${fields.join('')}</div>${actions?`<div class="admin-module-actions">${actions}</div>`:''}`}
+ function field(label,html){return `<label class="admin-field"><span>${label}</span>${html}</label>`}
+ function input(id,label,type='text',value='',extra=''){return field(label,`<input id="${id}" type="${type}" value="${escA(value)}" ${extra}>`)}
+ function select(id,label,html){return field(label,`<select id="${id}">${html}</select>`)}
+ function table(headers,rows,empty='لا توجد بيانات'){return `<div class="admin-table-wrap"><table class="admin-table"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows||`<tr><td colspan="${headers.length}" class="admin-empty">${empty}</td></tr>`}</tbody></table></div>`}
+ function actionBtns(kind,id){return `<button class="soft-btn admin-delete" data-admin-delete="${kind}" data-id="${escA(id)}">حذف</button>`}
+ function renderCompanies(){
+  const rows=A.companies.map((x,i)=>`<tr><td>${i+1}</td><td>${escA(x.name)}</td><td>${escA(x.cr||'—')}</td><td>${escA(x.phone||'—')}</td><td>${actionBtns('companies',x.id)}</td></tr>`).join('');
+  q('adminAffairsArea').innerHTML=shell('الشركات','تعريف الشركات التي سيعمل تحتها الموظفون والعقود.',formRow([input('acName','اسم الشركة'),input('acCr','السجل التجاري'),input('acPhone','الهاتف')],'<button class="gold-btn" id="acSave">＋ إضافة شركة</button>')+table(['#','الشركة','السجل التجاري','الهاتف','الإجراء'],rows));
+  q('acSave').onclick=()=>{const name=q('acName').value.trim();if(!name)return toast('أدخل اسم الشركة');A.companies.push({id:uid('co'),name,cr:q('acCr').value.trim(),phone:q('acPhone').value.trim()});save();renderCompanies();toast('تم حفظ الشركة')}
+ }
+ function renderDepartments(){
+  const rows=A.departments.map((x,i)=>`<tr><td>${i+1}</td><td>${escA(x.name)}</td><td>${escA(A.companies.find(c=>c.id===x.companyId)?.name||'—')}</td><td>${escA(A.positions.find(p=>p.id===x.positionId)?.name||'—')}</td><td>${actionBtns('departments',x.id)}</td></tr>`).join('');
+  const posRows=A.positions.map((x,i)=>`<tr><td>${i+1}</td><td>${escA(x.name)}</td><td>${escA(A.departments.find(d=>d.id===x.departmentId)?.name||'—')}</td><td>${actionBtns('positions',x.id)}</td></tr>`).join('');
+  q('adminAffairsArea').innerHTML=shell('الأقسام + المسميات','الأقسام والمسميات الوظيفية هي المرجع الذي يرتبط به الموظف.',formRow([select('adCompany','الشركة',companyOpts()),input('adDept','اسم القسم')],'<button class="gold-btn" id="adSave">＋ إضافة قسم</button>')+table(['#','القسم','الشركة','المسمى الافتراضي','الإجراء'],rows)+`<div class="admin-subtitle">المسميات الوظيفية</div>`+formRow([select('apDept','القسم',deptOpts()),input('apName','المسمى الوظيفي')],'<button class="gold-btn" id="apSave">＋ إضافة مسمى</button>')+table(['#','المسمى','القسم','الإجراء'],posRows));
+  q('adSave').onclick=()=>{const name=q('adDept').value.trim();if(!name)return toast('أدخل اسم القسم');A.departments.push({id:uid('dep'),name,companyId:q('adCompany').value});save();renderDepartments();toast('تم حفظ القسم')};
+  q('apSave').onclick=()=>{const name=q('apName').value.trim();if(!name)return toast('أدخل المسمى');A.positions.push({id:uid('pos'),name,departmentId:q('apDept').value});save();renderDepartments();toast('تم حفظ المسمى')};
+ }
+ function renderShifts(){
+  const rows=A.shifts.map((x,i)=>`<tr><td>${i+1}</td><td>${escA(x.name)}</td><td>${escA(x.start)} - ${escA(x.end)}</td><td>${x.fridayOff?'نعم':'لا'}</td><td>${x.saturdayOff?'نعم':'لا'}</td><td>${actionBtns('shifts',x.id)}</td></tr>`).join('');
+  q('adminAffairsArea').innerHTML=shell('الورديات','تعريف ساعات العمل وأيام الراحة. تم إنشاء وردية افتراضية 08:00–17:00 مع الجمعة والسبت إجازة.',formRow([input('asName','اسم الوردية'),input('asStart','من','time','08:00'),input('asEnd','إلى','time','17:00'),field('أيام الراحة','<div class="admin-checks"><label><input id="asFri" type="checkbox" checked> الجمعة</label><label><input id="asSat" type="checkbox" checked> السبت</label></div>')],'<button class="gold-btn" id="asSave">＋ إضافة وردية</button>')+table(['#','الوردية','الساعات','الجمعة إجازة','السبت إجازة','الإجراء'],rows));
+  q('asSave').onclick=()=>{const name=q('asName').value.trim();if(!name)return toast('أدخل اسم الوردية');A.shifts.push({id:uid('shift'),name,start:q('asStart').value||'08:00',end:q('asEnd').value||'17:00',fridayOff:q('asFri').checked,saturdayOff:q('asSat').checked});save();renderShifts();toast('تم حفظ الوردية')}
+ }
+ function renderLeaveTypes(){
+  const rows=A.leaveTypes.map((x,i)=>`<tr><td>${i+1}</td><td>${escA(x.name)}</td><td>${escA(x.days)}</td><td>${x.paid?'مدفوعة':'غير مدفوعة'}</td><td>${actionBtns('leaveTypes',x.id)}</td></tr>`).join('');
+  q('adminAffairsArea').innerHTML=shell('أنواع الإجازات','تعريف أنواع الإجازات ومددها. تم إنشاء الإجازة السنوية الافتراضية بحد 30 يوماً.',formRow([input('altName','اسم الإجازة','text',''),input('altDays','عدد الأيام','number','30','min="0"'),field('النوع','<div class="admin-checks"><label><input id="altPaid" type="checkbox" checked> مدفوعة</label></div>')],'<button class="gold-btn" id="altSave">＋ إضافة نوع إجازة</button>')+table(['#','النوع','الأيام','الحالة','الإجراء'],rows));
+  q('altSave').onclick=()=>{const name=q('altName').value.trim();if(!name)return toast('أدخل نوع الإجازة');A.leaveTypes.push({id:uid('leave'),name,days:Number(q('altDays').value||0),paid:q('altPaid').checked});save();renderLeaveTypes();toast('تم حفظ نوع الإجازة')}
+ }
+ function renderEmployees(){
+  const rows=A.employees.map((x,i)=>`<tr><td>${i+1}</td><td>${escA(x.name)}</td><td>${escA(x.idNo||'—')}</td><td>${escA(A.departments.find(d=>d.id===x.departmentId)?.name||'—')}</td><td>${escA(A.positions.find(p=>p.id===x.positionId)?.name||'—')}</td><td>${escA(A.shifts.find(s=>s.id===x.shiftId)?.name||'—')}</td><td>${actionBtns('employees',x.id)}</td></tr>`).join('');
+  q('adminAffairsArea').innerHTML=shell('الموظفين','الموظف يرتبط بالشركة والقسم والمسمى والوردية، ويصبح هو المرجع للحضور والإجازات والعقود.',formRow([input('aeName','اسم الموظف'),input('aeId','رقم الهوية'),select('aeCompany','الشركة',companyOpts()),select('aeDept','القسم',deptOpts()),select('aePos','المسمى',positionOpts()),select('aeShift','الوردية',shiftOpts()),input('aeJoin','تاريخ المباشرة','date',dateNow())],'<button class="gold-btn" id="aeSave">＋ إضافة موظف</button>')+table(['#','الموظف','الهوية','القسم','المسمى','الوردية','الإجراء'],rows));
+  q('aeSave').onclick=()=>{const name=q('aeName').value.trim();if(!name)return toast('أدخل اسم الموظف');A.employees.push({id:uid('emp'),name,idNo:q('aeId').value.trim(),companyId:q('aeCompany').value,departmentId:q('aeDept').value,positionId:q('aePos').value,shiftId:q('aeShift').value,startDate:q('aeJoin').value});save();renderEmployees();toast('تم حفظ الموظف')}
+ }
+ function renderContracts(){
+  const rows=A.contracts.map((x,i)=>{const e=A.employees.find(z=>z.id===x.employeeId);return `<tr><td>${i+1}</td><td>${escA(e?.name||'—')}</td><td>${escA(x.startDate||'—')}</td><td>${escA(x.basicSalary)}</td><td>${escA(x.probationDays)} يوم</td><td>${escA(x.annualLeaveDays)} يوم</td><td>${escA(x.status||'ساري')}</td><td>${actionBtns('contracts',x.id)}</td></tr>`}).join('');
+  q('adminAffairsArea').innerHTML=shell('العقود','العقد مرتبط بالموظف ويحتوي افتراضياً على 90 يوم تجربة و30 يوم إجازة سنوية.',formRow([select('acEmployee','الموظف',employeeOpts()),input('ctStart','بداية العقد','date',dateNow()),input('ctBasic','الراتب الأساسي','number','3000','min="0" step="0.01"'),input('ctProb','فترة التجربة بالأيام','number','90','min="0"'),input('ctLeave','الإجازة السنوية بالأيام','number','30','min="0"'),select('ctStatus','الحالة','<option value="ساري">ساري</option><option value="منتهي">منتهي</option><option value="موقوف">موقوف</option>')],'<button class="gold-btn" id="ctSave">＋ إضافة عقد</button>')+table(['#','الموظف','البداية','الأساسي','التجربة','الإجازة','الحالة','الإجراء'],rows));
+  q('ctSave').onclick=()=>{const employeeId=q('acEmployee').value;if(!employeeId)return toast('اختر الموظف');A.contracts.push({id:uid('ct'),employeeId,startDate:q('ctStart').value,basicSalary:Number(q('ctBasic').value||0),probationDays:Number(q('ctProb').value||90),annualLeaveDays:Number(q('ctLeave').value||30),status:q('ctStatus').value});save();renderContracts();toast('تم حفظ العقد')}
+ }
+ function renderAttendance(){
+  const rows=A.attendance.slice().reverse().map((x,i)=>{const e=A.employees.find(z=>z.id===x.employeeId),s=A.shifts.find(z=>z.id===x.shiftId);return `<tr><td>${i+1}</td><td>${escA(x.date)}</td><td>${escA(e?.name||'—')}</td><td>${escA(s?.name||'—')}</td><td>${escA(x.status)}</td><td>${escA(x.overtime||0)}</td><td>${actionBtns('attendance',x.id)}</td></tr>`}).join('');
+  q('adminAffairsArea').innerHTML=shell('الحضور','الحضور مرتبط بالموظف والوردية. يمكن تسجيل حاضر، غائب، متأخر، إجازة أو مهمة.',formRow([select('ahEmployee','الموظف',employeeOpts()),input('ahDate','التاريخ','date',dateNow()),select('ahShift','الوردية',shiftOpts()),select('ahStatus','الحالة','<option>حاضر</option><option>غائب</option><option>متأخر</option><option>إجازة</option><option>مهمة</option>'),input('ahOvertime','ساعات إضافية','number','0','min="0" step="0.5"')],'<button class="gold-btn" id="ahSave">＋ تسجيل الحضور</button>')+table(['#','التاريخ','الموظف','الوردية','الحالة','إضافي','الإجراء'],rows));
+  q('ahSave').onclick=()=>{const employeeId=q('ahEmployee').value;if(!employeeId)return toast('اختر الموظف');A.attendance.push({id:uid('att'),employeeId,date:q('ahDate').value,shiftId:q('ahShift').value,status:q('ahStatus').value,overtime:Number(q('ahOvertime').value||0)});save();renderAttendance();toast('تم تسجيل الحضور')}
+ }
+ function renderLeaveRequests(){
+  const rows=A.leaveRequests.slice().reverse().map((x,i)=>{const e=A.employees.find(z=>z.id===x.employeeId),l=A.leaveTypes.find(z=>z.id===x.leaveTypeId);return `<tr><td>${i+1}</td><td>${escA(x.from)}</td><td>${escA(x.to)}</td><td>${escA(e?.name||'—')}</td><td>${escA(l?.name||'—')}</td><td>${escA(x.days)}</td><td>${escA(x.status)}</td><td>${actionBtns('leaveRequests',x.id)}</td></tr>`}).join('');
+  q('adminAffairsArea').innerHTML=shell('طلبات الإجازات','طلب الإجازة مرتبط بالموظف ونوع الإجازة، مع احتساب عدد الأيام تلقائياً.',formRow([select('alEmployee','الموظف',employeeOpts()),select('alType','نوع الإجازة',leaveOpts()),input('alFrom','من','date',dateNow()),input('alTo','إلى','date',dateNow()),select('alStatus','الحالة','<option>معلق</option><option>مقبول</option><option>مرفوض</option>')],'<button class="gold-btn" id="alSave">＋ إضافة طلب</button>')+table(['#','من','إلى','الموظف','النوع','الأيام','الحالة','الإجراء'],rows));
+  q('alSave').onclick=()=>{const employeeId=q('alEmployee').value;if(!employeeId)return toast('اختر الموظف');const from=q('alFrom').value,to=q('alTo').value;const days=from&&to?Math.max(1,Math.floor((new Date(to)-new Date(from))/86400000)+1):0;A.leaveRequests.push({id:uid('lr'),employeeId,leaveTypeId:q('alType').value,from,to,days,status:q('alStatus').value});save();renderLeaveRequests();toast('تم حفظ طلب الإجازة')}
+ }
+ function calcPayroll(emp,month){
+  const contract=A.contracts.slice().reverse().find(c=>c.employeeId===emp.id&&(!c.startDate||c.startDate<=month+'-31'));
+  const base=Number(contract?.basicSalary||0), att=A.attendance.filter(a=>a.employeeId===emp.id&&String(a.date).startsWith(month)), leaves=A.leaveRequests.filter(l=>l.employeeId===emp.id&&l.status==='مقبول'&&String(l.from).slice(0,7)<=month&&String(l.to).slice(0,7)>=month);
+  const absent=att.filter(a=>a.status==='غائب').length, overtime=att.reduce((s,a)=>s+Number(a.overtime||0),0), leaveDays=leaves.reduce((s,l)=>s+Number(l.days||0),0);
+  const workDays=Math.max(1,daysInMonth(month)-((contract?.annualLeaveDays||30)>0?0:0));
+  const daily=base/workDays, absenceDeduction=absent*daily, overtimePay=overtime*(base/30/8*1.5), leaveDeduction=0;
+  return {base,absent,overtime,leaveDays,absenceDeduction,overtimePay,leaveDeduction,total:Math.max(0,base-absenceDeduction-leaveDeduction+overtimePay)};
+ }
+ function renderPayroll(){
+  const month=q('apMonth')?.value||monthKey();
+  const rows=A.employees.map((e,i)=>{const c=calcPayroll(e,month);return `<tr><td>${i+1}</td><td>${escA(e.name)}</td><td>${c.base.toFixed(2)}</td><td>${c.absent}</td><td>${c.leaveDays}</td><td>${c.overtime.toFixed(1)}</td><td class="num">${c.absenceDeduction.toFixed(2)}</td><td class="num">${c.overtimePay.toFixed(2)}</td><td class="num gold-text">${c.total.toFixed(2)}</td><td><button class="soft-btn admin-save-payroll" data-id="${e.id}">حفظ</button></td></tr>`}).join('');
+  const total=A.employees.reduce((s,e)=>s+calcPayroll(e,month).total,0);
+  q('adminAffairsArea').innerHTML=shell('الرواتب','الراتب يجمع بيانات العقد (6) مع الحضور (7) وطلبات الإجازات المقبولة (8).',formRow([input('apMonth','شهر الرواتب','month',month)],'<button class="gold-btn" id="apGenerate">↻ تحديث الرواتب</button>')+`<div class="payroll-total"><span>إجمالي الرواتب</span><b>${total.toFixed(2)} SAR</b></div>`+table(['#','الموظف','العقد','غياب','إجازات','إضافي','خصم الغياب','بدل إضافي','الصافي','الإجراء'],rows,'أضف موظفين وعقوداً أولاً.'));
+  q('apGenerate').onclick=renderPayroll;
+  q('apMonth').onchange=renderPayroll;
+  q('adminAffairsArea').querySelectorAll('.admin-save-payroll').forEach(btn=>btn.onclick=()=>{const e=A.employees.find(x=>x.id===btn.dataset.id);if(!e)return;const c=calcPayroll(e,month);const idx=A.payroll.findIndex(p=>p.employeeId===e.id&&p.month===month);const item={id:idx>=0?A.payroll[idx].id:uid('pay'),employeeId:e.id,month,base:c.base,absenceDeduction:c.absenceDeduction,overtimePay:c.overtimePay,leaveDays:c.leaveDays,total:c.total};if(idx>=0)A.payroll[idx]=item;else A.payroll.push(item);save();toast('تم حفظ راتب الموظف')});
+ }
+ const renders={companies:renderCompanies,departments:renderDepartments,shifts:renderShifts,leaveTypes:renderLeaveTypes,employees:renderEmployees,contracts:renderContracts,attendance:renderAttendance,leaveRequests:renderLeaveRequests,payroll:renderPayroll};
+ let active='companies';
+ function setModule(m){active=m;document.querySelectorAll('[data-admin-module]').forEach(b=>b.classList.toggle('active',b.dataset.adminModule===m));const fn=renders[m];if(fn)fn();}
+ function toggleSub(open){const s=q('adminAffairsSubnav'),n=q('adminAffairsNav');if(!s||!n)return;s.classList.toggle('show',open??!s.classList.contains('show'));s.setAttribute('aria-hidden',String(!s.classList.contains('show')));n.classList.toggle('expanded',s.classList.contains('show'))}
+ document.addEventListener('DOMContentLoaded',()=>{
+   const nav=q('adminAffairsNav');
+   if(nav)nav.addEventListener('click',()=>{toggleSub(true);setModule(active);});
+   document.querySelectorAll('.nav:not(#adminAffairsNav)').forEach(b=>b.addEventListener('click',()=>toggleSub(false)));
+   document.querySelectorAll('#adminAffairsSubnav [data-admin-module], #adminAffairs .admin-flow-step').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();toggleSub(true);setModule(b.dataset.adminModule)}));
+   document.addEventListener('click',e=>{const del=e.target.closest('.admin-delete');if(!del)return;const kind=del.dataset.adminDelete,id=del.dataset.id;if(!A[kind])return;if(!confirm('هل تريد حذف هذا السجل؟'))return;A[kind]=A[kind].filter(x=>x.id!==id);if(kind==='departments')A.positions=A.positions.filter(x=>x.departmentId!==id);if(kind==='employees'){A.contracts=A.contracts.filter(x=>x.employeeId!==id);A.attendance=A.attendance.filter(x=>x.employeeId!==id);A.leaveRequests=A.leaveRequests.filter(x=>x.employeeId!==id)}save();renders[active]?.();toast('تم الحذف')});
+   if(q('adminAffairs')){setModule('companies')}
+ });
+ window.renderAdminAffairs=()=>renders[active]?.();
+ window.openAdminAffairsModule=m=>{toggleSub(true);setModule(m)};
 })();
