@@ -1,5 +1,7 @@
 
-(()=> {
+(async()=> {
+const firebaseUser=await window.firebaseUserReady;
+const FB=window.FB;
 const INIT=window.INITIAL_DATA||{accounts:[],journal:[]};
 const KEY="mostafa-accounting-erp-v1";
 // Load the last saved database first. Previously the app always rebuilt `db` from
@@ -18,22 +20,47 @@ function loadSavedDB(){
   }
 }
 const SAVED=loadSavedDB();
-let db=SAVED?{
-  accounts:SAVED.accounts.map(x=>({...x})),
-  journal:SAVED.journal.map(x=>({...x})),
-  customers:Array.isArray(SAVED.customers)?SAVED.customers.map(x=>({...x})):[],
-  salesOrders:Array.isArray(SAVED.salesOrders)?SAVED.salesOrders.map(x=>({...x})):[],
-  invoices:Array.isArray(SAVED.invoices)?SAVED.invoices.map(x=>({...x})):[],
-  collections:Array.isArray(SAVED.collections)?SAVED.collections.map(x=>({...x})):[],
-  lang:SAVED.lang||localStorage.getItem("ma-lang")||"ar",
-  theme:SAVED.theme||localStorage.getItem("ma-theme")||"dark"
-}:{
-  accounts:INIT.accounts.map(x=>({...x})),
-  journal:INIT.journal.map(x=>({...x})),
-  customers:[],salesOrders:[],invoices:[],collections:[],
-  lang:localStorage.getItem("ma-lang")||"ar",
-  theme:localStorage.getItem("ma-theme")||"dark"
+let db={
+  accounts:(SAVED?.accounts||INIT.accounts).map(x=>({...x})),
+  journal:(SAVED?.journal||INIT.journal).map(x=>({...x})),
+  customers:Array.isArray(SAVED?.customers)?SAVED.customers.map(x=>({...x})):[],
+  salesOrders:Array.isArray(SAVED?.salesOrders)?SAVED.salesOrders.map(x=>({...x})):[],
+  invoices:Array.isArray(SAVED?.invoices)?SAVED.invoices.map(x=>({...x})):[],
+  collections:Array.isArray(SAVED?.collections)?SAVED.collections.map(x=>({...x})):[],
+  lang:SAVED?.lang||localStorage.getItem("ma-lang")||"ar",
+  theme:SAVED?.theme||localStorage.getItem("ma-theme")||"dark"
 };
+
+// Firestore is the authoritative store for accounting data. localStorage is kept only
+// as a short-lived cache/fallback while the cloud document is being loaded.
+const CLOUD_DOC=FB.doc(FB.firestore,'accountingData','main');
+async function hydrateFromFirestore(){
+  try{
+    const snap=await FB.getDoc(CLOUD_DOC);
+    if(snap.exists()){
+      const cloud=snap.data();
+      db.accounts=Array.isArray(cloud.accounts)?cloud.accounts.map(x=>({...x})):[];
+      db.journal=Array.isArray(cloud.journal)?cloud.journal.map(x=>({...x})):[];
+      db.customers=Array.isArray(cloud.customers)?cloud.customers.map(x=>({...x})):[];
+      db.salesOrders=Array.isArray(cloud.salesOrders)?cloud.salesOrders.map(x=>({...x})):[];
+      db.invoices=Array.isArray(cloud.invoices)?cloud.invoices.map(x=>({...x})):[];
+      db.collections=Array.isArray(cloud.collections)?cloud.collections.map(x=>({...x})):[];
+      return true;
+    }
+    const seed={accounts:db.accounts,journal:db.journal,customers:db.customers,salesOrders:db.salesOrders,invoices:db.invoices,collections:db.collections,createdBy:firebaseUser.uid,createdAt:new Date().toISOString()};
+    await FB.setDoc(CLOUD_DOC,seed);
+    return true;
+  }catch(err){
+    console.error('Firestore load failed:',err);
+    document.body.classList.add('firebase-data-error');
+    const box=document.createElement('div');
+    box.className='firebase-data-error-box';
+    box.innerHTML='<b>تعذر تحميل قاعدة البيانات السحابية</b><span>لم يتم فتح البيانات المحاسبية المحلية. افتح Firestore وتأكد من إنشاء قاعدة البيانات ونشر قواعد الأمان ثم أعد المحاولة.</span><button class="gold-btn" onclick="location.reload()">إعادة المحاولة</button>';
+    document.body.appendChild(box);
+    throw err;
+  }
+}
+await hydrateFromFirestore();
 // Normalize the establishment-expenses branch to the same 1/2/3/5/7 digit hierarchy.
 (function normalizeEstablishmentExpenses(){
  const map=new Map([[5351,53501]]);
@@ -48,7 +75,23 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 const fmt=n=>Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const arEn=(ar,en)=>db.lang==="ar"?ar:en;
-function save(){try{localStorage.setItem(KEY,JSON.stringify(db));return true}catch(err){console.error("Could not save accounting data:",err);toast(arEn("تعذر حفظ البيانات محلياً","Could not save data locally"));return false}}
+
+function installFirebaseUserBar(){
+  const side=document.querySelector('.side-bottom');
+  if(!side || document.getElementById('firebaseLogoutBtn')) return;
+  const wrap=document.createElement('div'); wrap.className='firebase-user-bar';
+  wrap.innerHTML='<span id="firebaseUserEmail"></span><button id="firebaseLogoutBtn" class="soft-btn">خروج</button>';
+  side.parentNode.insertBefore(wrap,side);
+  document.getElementById('firebaseLogoutBtn').onclick=()=>window.firebaseSignOut();
+  const el=document.getElementById('firebaseUserEmail'); if(el) el.textContent=firebaseUser.email||'';
+}
+installFirebaseUserBar();
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(db));}catch(err){console.warn('Local cache unavailable',err);}
+  const payload={accounts:db.accounts,journal:db.journal,customers:db.customers||[],salesOrders:db.salesOrders||[],invoices:db.invoices||[],collections:db.collections||[],updatedBy:firebaseUser.uid,updatedAt:new Date().toISOString()};
+  FB.setDoc(CLOUD_DOC,payload).then(()=>toast(arEn('تم حفظ البيانات في قاعدة البيانات السحابية','Data saved to cloud database'))).catch(err=>{console.error('Firestore save failed:',err);toast(arEn('فشل حفظ البيانات سحابياً — لم يتم اعتماد التعديل','Cloud save failed — change was not committed'));});
+  return true;
+}
 function toast(m){$("#toast").textContent=m;$("#toast").classList.add("show");clearTimeout(window.__tt);window.__tt=setTimeout(()=>$("#toast").classList.remove("show"),2300)}
 function applyLang(){
  document.documentElement.lang=db.lang;document.documentElement.dir=db.lang==="ar"?"rtl":"ltr";
