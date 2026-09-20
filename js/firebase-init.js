@@ -33,7 +33,6 @@ function ensureLoginUI(){
           <path d="M21 33h4m7 0h4m7 0h0M21 42h4m7 0h4m7 0h0M21 51h4m7 0h4m7 0h0" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
         </svg>
       </div>
-      <div class="firebase-login-kicker">ACCOUNTING • CONTROL • ANALYTICS</div>
       <h2>MOSTAFA'S <span>MYTH</span></h2>
       <form id="firebaseLoginForm" autocomplete="on">
         <label class="firebase-field">
@@ -66,6 +65,12 @@ function ensureLoginUI(){
         <div id="firebaseLoginError" class="firebase-login-error" role="alert"></div>
       </form>
       <div class="firebase-signup">Don't have an account? <span>Sign Up</span></div>
+      <div class="firebase-socials" aria-label="Contact links">
+        <a class="firebase-social" href="#" aria-label="Facebook">f</a>
+        <a class="firebase-social" href="#" aria-label="WhatsApp">⌕</a>
+        <a class="firebase-social" href="#" aria-label="Instagram">◎</a>
+      </div>
+      <a class="firebase-phone" href="tel:+966537013542" aria-label="Call +966 537013542">☎ <span>+966 537013542</span></a>
     </div>`;
 
   const passwordToggle=document.getElementById('firebasePasswordToggle');
