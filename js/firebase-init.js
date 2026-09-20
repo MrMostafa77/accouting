@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 // Firebase Web configuration for the Accounting Management System.
@@ -25,18 +25,74 @@ function ensureLoginUI(){
   const box=document.createElement('div');
   box.id='firebaseLogin';
   box.innerHTML=`
-    <div class="firebase-login-card">
-      <div class="firebase-login-mark">FJ</div>
-      <div class="firebase-login-kicker">Fakher Aljazeera Security Guards</div>
-      <h2>نظام الإدارة والمحاسبة</h2>
-      <p>تسجيل الدخول للوصول إلى النظام</p>
+    <div class="firebase-login-card" dir="ltr">
+      <div class="firebase-login-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" role="img">
+          <rect x="13" y="7" width="38" height="50" rx="6" fill="none" stroke="currentColor" stroke-width="4"/>
+          <rect x="19" y="13" width="26" height="11" rx="2.5" fill="currentColor" opacity=".22"/>
+          <path d="M21 33h4m7 0h4m7 0h0M21 42h4m7 0h4m7 0h0M21 51h4m7 0h4m7 0h0" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="firebase-login-kicker">ACCOUNTING • CONTROL • ANALYTICS</div>
+      <h2>MOSTAFA'S <span>MYTH</span></h2>
       <form id="firebaseLoginForm" autocomplete="on">
-        <label>اسم المستخدم (البريد الإلكتروني)<input id="firebaseEmail" type="email" autocomplete="username" required placeholder="example@email.com"></label>
-        <label>كلمة المرور<input id="firebasePassword" type="password" autocomplete="current-password" required placeholder="كلمة المرور"></label>
-        <button class="gold-btn firebase-login-btn" type="submit">دخول</button>
+        <label class="firebase-field">
+          <span class="field-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0"/></svg>
+          </span>
+          <input id="firebaseEmail" type="email" autocomplete="username" required placeholder="Username">
+        </label>
+        <label class="firebase-field">
+          <span class="field-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          </span>
+          <input id="firebasePassword" type="password" autocomplete="current-password" required placeholder="Password">
+          <button type="button" class="firebase-password-toggle" id="firebasePasswordToggle" aria-label="Show password">
+            <svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+          </button>
+        </label>
+        <button class="firebase-login-btn" type="submit">
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <rect x="13" y="7" width="38" height="50" rx="6" fill="none" stroke="currentColor" stroke-width="4"/>
+            <rect x="19" y="13" width="26" height="11" rx="2.5" fill="currentColor" opacity=".22"/>
+            <path d="M21 33h4m7 0h4m7 0h0M21 42h4m7 0h4m7 0h0M21 51h4m7 0h4m7 0h0" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+          <span>Sign In</span>
+        </button>
+        <div class="firebase-or"><span>or</span></div>
+        <button type="button" class="firebase-google-btn" id="firebaseGoogleBtn">
+          <span class="google-g" aria-hidden="true">G</span><span>Continue with Google</span>
+        </button>
         <div id="firebaseLoginError" class="firebase-login-error" role="alert"></div>
       </form>
+      <div class="firebase-signup">Don't have an account? <span>Sign Up</span></div>
     </div>`;
+
+  const passwordToggle=document.getElementById('firebasePasswordToggle');
+  const passwordInput=document.getElementById('firebasePassword');
+  passwordToggle?.addEventListener('click',()=>{
+    const visible=passwordInput.type==='text';
+    passwordInput.type=visible?'password':'text';
+    passwordToggle.setAttribute('aria-label',visible?'Show password':'Hide password');
+  });
+
+  document.getElementById('firebaseGoogleBtn')?.addEventListener('click',async()=>{
+    const err=document.getElementById('firebaseLoginError');
+    const btn=document.getElementById('firebaseGoogleBtn');
+    err.textContent=''; btn.disabled=true;
+    try{ await signInWithPopup(auth,new GoogleAuthProvider()); }
+    catch(ex){
+      const map={
+        'auth/popup-closed-by-user':'Google sign-in was cancelled.',
+        'auth/popup-blocked':'Your browser blocked the Google sign-in window.',
+        'auth/operation-not-allowed':'Google sign-in is not enabled in Firebase Console.',
+        'auth/unauthorized-domain':'This domain is not authorized in Firebase Authentication.'
+      };
+      console.error('Firebase Google sign-in failed:', ex?.code, ex?.message, ex);
+      err.textContent=(map[ex?.code]||'Google sign-in could not be completed.')+' ['+(ex?.code||'no-code')+']';
+      btn.disabled=false;
+    }
+  });
   document.body.appendChild(box);
   const form=document.getElementById('firebaseLoginForm');
   form.addEventListener('submit', async e=>{

@@ -228,12 +228,37 @@ body.light{--bg:#edf1f5;--panel:rgba(255,255,255,.92);--panel2:#fff;--line:rgba(
 
 /* Firebase authentication / cloud data protection */
 body.firebase-locked > .app{visibility:hidden;pointer-events:none}
-#firebaseLogin{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(5,10,20,.92);backdrop-filter:blur(10px)}
+#firebaseLogin{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;padding:24px;background-image:linear-gradient(rgba(7,14,25,.14),rgba(7,14,25,.14)),url("../assets/login-background.jpg");background-size:cover;background-position:center;background-repeat:no-repeat;overflow:auto}
 #firebaseLogin.show{display:flex}
-.firebase-login-card{width:min(440px,94vw);padding:34px;border:1px solid rgba(212,175,55,.35);border-radius:24px;background:#101827;box-shadow:0 25px 80px rgba(0,0,0,.5);color:#fff;text-align:center}
-.firebase-login-mark{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;margin:0 auto 16px;background:#d4af37;color:#111;font-weight:900;font-size:20px}
-.firebase-login-kicker{font-size:12px;letter-spacing:.08em;opacity:.7}.firebase-login-card h2{margin:8px 0 6px}.firebase-login-card p{opacity:.65;margin:0 0 24px}
-.firebase-login-card form{display:grid;gap:14px;text-align:right}.firebase-login-card label{display:grid;gap:7px;font-weight:700}.firebase-login-card input{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#0a1220;color:#fff;outline:none}.firebase-login-card input:focus{border-color:#d4af37}.firebase-login-btn{width:100%;padding:13px}.firebase-login-error{min-height:20px;color:#ff8b8b;font-size:13px}
+.firebase-login-card{width:min(540px,94vw);padding:42px 44px 38px;border:1px solid rgba(255,255,255,.32);border-radius:24px;background:linear-gradient(145deg,rgba(235,238,243,.62),rgba(173,181,192,.50));box-shadow:0 28px 90px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;text-align:center}
+.firebase-login-mark{width:66px;height:66px;border-radius:20px;display:grid;place-items:center;margin:0 auto 15px;background:linear-gradient(145deg,#3d78ff,#2457d8);color:#fff;box-shadow:0 14px 30px rgba(35,91,224,.35)}
+.firebase-login-mark svg{width:40px;height:40px;display:block}
+.firebase-login-kicker{font-family:"Space Grotesk",Arial,sans-serif;font-size:11px;letter-spacing:.12em;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.28);opacity:.92}
+.firebase-login-card h2{margin:8px 0 25px;font-family:"Space Grotesk",Cairo,sans-serif;font-size:31px;line-height:1.1;letter-spacing:1px;font-weight:800;text-shadow:0 3px 8px rgba(0,0,0,.35);color:#fff}
+.firebase-login-card h2 span{color:#2865ed}
+.firebase-login-card form{display:grid;gap:13px;text-align:left}
+.firebase-field{position:relative;display:block}
+.firebase-field input{width:100%;height:62px;box-sizing:border-box;padding:0 52px 0 66px;border-radius:13px;border:1px solid rgba(17,40,88,.28);background:rgba(19,40,88,.84);color:#fff;outline:none;font:500 18px "Space Grotesk",Cairo,sans-serif;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.firebase-field input::placeholder{color:rgba(255,255,255,.84)}
+.firebase-field input:focus{border-color:#3977ff;box-shadow:0 0 0 2px rgba(54,113,255,.22),inset 0 1px 0 rgba(255,255,255,.08)}
+.field-icon{position:absolute;z-index:2;left:20px;top:50%;transform:translateY(-50%);width:26px;height:26px;color:#eef4ff;pointer-events:none}
+.field-icon svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.firebase-password-toggle{position:absolute;right:14px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#e9effb;padding:7px;cursor:pointer;display:grid;place-items:center}
+.firebase-password-toggle svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.firebase-login-btn{width:100%;height:63px;padding:0 18px;border:0;border-radius:13px;background:linear-gradient(135deg,#3573ff,#2863eb);color:#fff;display:flex;align-items:center;justify-content:center;gap:12px;cursor:pointer;font:800 19px "Space Grotesk",Cairo,sans-serif;box-shadow:0 13px 28px rgba(40,99,235,.30);transition:.2s}
+.firebase-login-btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
+.firebase-login-btn:disabled{opacity:.65;cursor:wait;transform:none}
+.firebase-login-btn svg{width:29px;height:29px}
+.firebase-or{display:flex;align-items:center;gap:12px;color:#fff;font:800 15px "Space Grotesk",Arial,sans-serif;margin:4px 0 2px;text-shadow:0 2px 6px rgba(0,0,0,.3)}
+.firebase-or:before,.firebase-or:after{content:"";height:1px;flex:1;background:rgba(255,255,255,.62)}
+.firebase-google-btn{width:100%;height:61px;border:1px solid rgba(17,40,88,.25);border-radius:13px;background:rgba(19,40,88,.84);color:#fff;display:flex;align-items:center;justify-content:center;gap:13px;cursor:pointer;font:700 17px "Space Grotesk",Cairo,sans-serif;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:.2s}
+.firebase-google-btn:hover{background:rgba(14,33,75,.92);transform:translateY(-1px)}
+.firebase-google-btn:disabled{opacity:.65;cursor:wait;transform:none}
+.google-g{width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:#fff;color:#4285f4;font:bold 22px Arial,sans-serif}
+.firebase-login-error{min-height:20px;margin-top:-2px;color:#ffe0e0;font-size:12px;font-weight:700;text-align:center;text-shadow:0 1px 5px rgba(0,0,0,.35)}
+.firebase-signup{margin-top:25px;color:#fff;font:700 14px "Space Grotesk",Cairo,sans-serif;text-shadow:0 2px 6px rgba(0,0,0,.3)}
+.firebase-signup span{color:#2865ed;font-weight:800}
+@media(max-width:600px){#firebaseLogin{padding:14px;background-position:center center}.firebase-login-card{width:min(100%,500px);padding:30px 20px 28px;border-radius:21px}.firebase-login-mark{width:58px;height:58px;border-radius:17px}.firebase-login-mark svg{width:35px;height:35px}.firebase-login-card h2{font-size:27px;margin-bottom:20px}.firebase-field input{height:56px;font-size:16px;padding-left:58px}.firebase-login-btn{height:57px;font-size:17px}.firebase-google-btn{height:55px;font-size:15px}}
 .firebase-user-bar{display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:12px}.firebase-user-bar span{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;opacity:.7}.firebase-user-bar button{padding:7px 10px}
 .firebase-data-error-box{position:fixed;z-index:100000;inset:auto 20px 20px 20px;padding:18px;border:1px solid #d4af37;border-radius:16px;background:#111827;color:#fff;display:grid;gap:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .firebase-data-error-box span{opacity:.8}.firebase-data-error-box button{justify-self:start}
