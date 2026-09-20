@@ -5,7 +5,7 @@ import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/fireb
 // Firebase Web configuration for the Accounting Management System.
 // These values identify the web app; they are not a service-account private key.
 const firebaseConfig = {
-  apiKey: 'AIzaSyByOjJ6FVqNJBydEhRd2Zv3prYaSchwL_w',
+  apiKey: 'AIzaSyByOjJ6FVqNJBvdEhRd2Zv3prYaSchwL_w',
   authDomain: 'mostafa-s-myth.firebaseapp.com',
   projectId: 'mostafa-s-myth',
   storageBucket: 'mostafa-s-myth.firebasestorage.app',
