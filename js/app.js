@@ -73,14 +73,18 @@ await hydrateFromFirestore();
  db.journal.forEach(x=>{const n=Number(x.code); if(map.has(n)) x.code=map.get(n); if(map.has(Number(x.code))) x.code=map.get(Number(x.code));});
 })();
 db.customers=db.customers||[];db.salesOrders=db.salesOrders||[];db.invoices=db.invoices||[];db.collections=db.collections||[];
-// Real-time Firestore synchronization: every connected user receives committed changes instantly.
+// Real-time Firestore synchronization. The listener is the source of truth for every
+// connected browser: add/edit/delete operations saved by one user are applied to all
+// other users immediately, without a refresh.
 if(!window.__realtimeSyncStarted){
   window.__realtimeSyncStarted=true;
-  FB.onSnapshot(CLOUD_DOC,(snap)=>{
+  window.__realtimeUnsubscribe=FB.onSnapshot(CLOUD_DOC,{includeMetadataChanges:false},(snap)=>{
     if(!snap.exists()) return;
-    const cloud=snap.data();
+    const cloud=snap.data()||{};
     const incomingStamp=cloud.updatedAt||null;
-    if(!incomingStamp || incomingStamp===cloudStamp) return;
+    // Ignore only our own already-applied write. Every different cloud version is
+    // applied, including deletes (empty arrays are valid and must propagate).
+    if(incomingStamp && incomingStamp===cloudStamp) return;
     db.accounts=Array.isArray(cloud.accounts)?cloud.accounts.map(x=>({...x})):[];
     db.journal=Array.isArray(cloud.journal)?cloud.journal.map(x=>({...x})):[];
     db.customers=Array.isArray(cloud.customers)?cloud.customers.map(x=>({...x})):[];
@@ -91,7 +95,10 @@ if(!window.__realtimeSyncStarted){
     try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}
     if(cloud.adminAffairs) window.__adminApplyCloud?.(cloud.adminAffairs);
     if(typeof window.refreshRealtimeUI==='function') window.refreshRealtimeUI();
-  },(err)=>console.error('Firestore realtime listener failed:',err));
+  },(err)=>{
+    console.error('Firestore realtime listener failed:',err);
+    window.__realtimeSyncError=err;
+  });
 }
 let currentCustomerTab="customers";
 let expanded=new Set(), selected=null, currentView="home", journalEditId=null, currentJournalEntry=null;
