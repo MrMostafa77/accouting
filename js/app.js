@@ -34,6 +34,7 @@ let db={
 // Firestore is the authoritative store for accounting data. localStorage is kept only
 // as a short-lived cache/fallback while the cloud document is being loaded.
 const CLOUD_DOC=FB.doc(FB.firestore,'accountingData','main');
+let cloudStamp=null, conflictLocked=false, saveChain=Promise.resolve();
 async function hydrateFromFirestore(){
   try{
     const snap=await FB.getDoc(CLOUD_DOC);
@@ -45,10 +46,12 @@ async function hydrateFromFirestore(){
       db.salesOrders=Array.isArray(cloud.salesOrders)?cloud.salesOrders.map(x=>({...x})):[];
       db.invoices=Array.isArray(cloud.invoices)?cloud.invoices.map(x=>({...x})):[];
       db.collections=Array.isArray(cloud.collections)?cloud.collections.map(x=>({...x})):[];
+      cloudStamp=cloud.updatedAt||null;
       return true;
     }
     const seed={accounts:db.accounts,journal:db.journal,customers:db.customers,salesOrders:db.salesOrders,invoices:db.invoices,collections:db.collections,createdBy:firebaseUser.uid,createdAt:new Date().toISOString()};
-    await FB.setDoc(CLOUD_DOC,seed);
+    seed.updatedAt=seed.createdAt;
+    await FB.setDoc(CLOUD_DOC,seed); cloudStamp=seed.updatedAt;
     return true;
   }catch(err){
     console.error('Firestore load failed:',err);
@@ -75,6 +78,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 const fmt=n=>Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const arEn=(ar,en)=>db.lang==="ar"?ar:en;
+const r2=n=>Math.round((Number(n||0)+Number.EPSILON)*100)/100;
 
 function installFirebaseUserBar(){
   const bar=document.getElementById('firebaseUserBar');
@@ -91,10 +95,26 @@ function installFirebaseUserBar(){
   }
 }
 installFirebaseUserBar();
+function showConflict(){
+ conflictLocked=true;
+ const m=$("#modal"); if(!m) return;
+ m.innerHTML=`<h3>${arEn("تم تعديل البيانات من مكان آخر","Data was changed elsewhere")}</h3><p style="line-height:1.9">${arEn("قام مستخدم أو جهاز آخر بحفظ تعديلات بعد فتحك للصفحة. لم يتم حفظ تعديلك الأخير حتى لا تُمسح تعديلات الآخر. أعد تحميل الصفحة ثم كرّر التعديل.","Another user/device saved changes after you opened this page. Your last edit was NOT saved so theirs isn't overwritten. Reload the page, then repeat the edit.")}</p><div class="modal-foot"><button class="gold-btn" onclick="location.reload()">${arEn("إعادة تحميل الصفحة","Reload page")}</button></div>`;
+ $("#modalBack").classList.add("show");
+}
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify(db));}catch(err){console.warn('Local cache unavailable',err);}
   const payload={accounts:db.accounts,journal:db.journal,customers:db.customers||[],salesOrders:db.salesOrders||[],invoices:db.invoices||[],collections:db.collections||[],updatedBy:firebaseUser.uid,updatedAt:new Date().toISOString()};
-  FB.setDoc(CLOUD_DOC,payload).then(()=>toast(arEn('تم حفظ البيانات في قاعدة البيانات السحابية','Data saved to cloud database'))).catch(err=>{console.error('Firestore save failed:',err);toast(arEn('فشل حفظ البيانات سحابياً — لم يتم اعتماد التعديل','Cloud save failed — change was not committed'));});
+  // A single Firestore document is capped at 1 MiB — warn early, refuse before a silent failure.
+  const bytes=new TextEncoder().encode(JSON.stringify(payload)).length;
+  if(bytes>1000000){toast(arEn("حجم البيانات وصل حد قاعدة البيانات (1 ميجا). لم يتم الحفظ — خذ نسخة احتياطية وتواصل لتقسيم البيانات.","Data reached the database size limit (1 MB). Not saved — take a backup and split the data."));return false;}
+  if(bytes>700000&&!window.__sizeWarned){window.__sizeWarned=true;setTimeout(()=>toast(arEn("تنبيه: حجم البيانات تجاوز 70% من حد قاعدة البيانات. خذ نسخة احتياطية وخطّط لتقسيم البيانات.","Notice: data is over 70% of the database size limit. Take a backup and plan to split the data.")),2500);}
+  if(conflictLocked){showConflict();return false;}
+  saveChain=saveChain.then(async()=>{
+    const snap=await FB.getDoc(CLOUD_DOC);
+    if(snap.exists()&&cloudStamp&&snap.data().updatedAt&&snap.data().updatedAt!==cloudStamp){showConflict();return;}
+    await FB.setDoc(CLOUD_DOC,payload); cloudStamp=payload.updatedAt;
+    toast(arEn('تم حفظ البيانات في قاعدة البيانات السحابية','Data saved to cloud database'));
+  }).catch(err=>{console.error('Firestore save failed:',err);toast(arEn('فشل حفظ البيانات سحابياً — لم يتم اعتماد التعديل','Cloud save failed — change was not committed'));});
   return true;
 }
 function toast(m){$("#toast").textContent=m;$("#toast").classList.add("show");clearTimeout(window.__tt);window.__tt=setTimeout(()=>$("#toast").classList.remove("show"),2300)}
@@ -109,7 +129,7 @@ function openView(v){
  $("#title").textContent={home:arEn("لوحة التحكم","Dashboard"),tree:arEn("شجرة الحسابات","Chart of Accounts"),journal:arEn("قيود اليومية","Journal Entries"),ledger:arEn("الأستاذ العام","General Ledger"),trial:arEn("ميزان المراجعة","Trial Balance"),statements:arEn("القوائم المالية","Financial Statements"),reports:arEn("التقارير","Reports"),customers:arEn("العملاء والمبيعات","Customers & Sales"),invoicePage:arEn("فاتورة ضريبية","Tax Invoice")}[v];
  if(v==="home")renderHome(); if(v==="tree")renderTree(); if(v==="journal")renderJournal(); if(v==="ledger")renderLedger(); if(v==="trial")renderTrial(); if(v==="statements")renderStatements(); if(v==="reports")renderReports(); if(v==="customers")renderCustomers();
 }
-window.openView=openView;
+window.openView=openView;window.arEn=arEn;window.applyLang=applyLang;window.showToast=m=>toast(m);
 function accountMap(){return new Map(db.accounts.map(a=>[String(a.code),a]))}
 function parentCode(code){
  const s=String(code);
@@ -144,8 +164,12 @@ function renderHome(){
   [arEn("عدد الحسابات","Accounts"),db.accounts.length,arEn("من الشجرة","From chart")],
   [arEn("عدد القيود","Journal entries"),entries,arEn("قيد مسجل","Recorded entries")],
   [arEn("إجمالي المدين","Total debit"),fmt(totalD),arEn("ريال","SAR")],
-  [arEn("إجمالي الدائن","Total credit"),fmt(totalC),arEn("ريال","SAR")]
- ].map(x=>`<div class="stat"><span>${x[0]}</span><strong>${x[1]}</strong><em>${x[2]}</em></div>`).join("");
+  [arEn("إجمالي الدائن","Total credit"),fmt(totalC),arEn("ريال","SAR")],
+  [arEn("النقد والبنوك","Cash & banks"),fmt(sumPrefix("121")),arEn("ريال","SAR")],
+  [arEn("أرصدة العملاء","Receivables"),fmt(sumPrefix("124")),arEn("ريال","SAR")],
+  [arEn("صافي ضريبة القيمة المضافة","Net VAT"),fmt(-sumPrefix("22202")-sumPrefix("12301")),arEn((-sumPrefix("22202")-sumPrefix("12301"))>=0?"مستحقة السداد":"قابلة للاسترداد",(-sumPrefix("22202")-sumPrefix("12301"))>=0?"Payable":"Refundable")],
+  [arEn("نتيجة الأعمال حتى الآن","Net result to date"),fmt(-sumPrefix("4")-sumPrefix("5")),arEn((-sumPrefix("4")-sumPrefix("5"))>=0?"ربح":"خسارة",(-sumPrefix("4")-sumPrefix("5"))>=0?"Profit":"Loss"),(-sumPrefix("4")-sumPrefix("5"))<0?"neg":""]
+ ].map(x=>`<div class="stat ${x[3]||""}"><span>${x[0]}</span><strong>${x[1]}</strong><em>${x[2]}</em></div>`).join("");
  const recent=[...db.journal].sort((a,b)=>String(b.date).localeCompare(String(a.date))||Number(b.entry)-Number(a.entry)).slice(0,8);
  $("#recent").innerHTML=recent.map(x=>`<div class="entry-row"><b class="num">${x.entry}</b><span class="muted">${esc(x.date)}</span><span>${esc(x.a5||x.search||x.code)}</span><span class="muted">${esc(x.desc)}</span><span>${esc(x.invoice||"—")}</span><span class="debit num">${x.debit?fmt(x.debit):"—"}</span><span class="credit num">${x.credit?fmt(x.credit):"—"}</span><span></span></div>`).join("");
  const roots=db.accounts.filter(a=>!parentCode(a.code)).sort((a,b)=>Number(a.code)-Number(b.code));
@@ -360,6 +384,7 @@ function fillAccountSelects(){
  const la=$('#ledgerAccount'); if(la){const current=la.value;la.innerHTML=`<option value="">${arEn('اختر الحساب','Select account')}</option>`+ledgerAccountOptions($('#ledgerSearch')?.value||"",current);if(current)la.value=current;}
 }
 window.openJournalModal=(entry=null)=>{
+ if(entry&&guardLinkedEntry(entry))return;
  const groups=entryGroups(), old=entry?groups.find(g=>String(g.entry)===String(entry)):null;
  const editor=$('#journalEditor'); if(!editor)return;
  $('#journalTablePanel').style.display='none';
@@ -476,7 +501,7 @@ window.openJournalModal=(entry=null)=>{
 };
 window.closeJournalEditor=()=>{const e=$('#journalEditor');if(e){e.style.display='none';e.innerHTML='';}$('#journalTablePanel').style.display='block';$('#journalPager').style.display='block';renderJournal();};
 
-window.deleteEntry=entry=>{if(!confirm(arEn("حذف القيد بالكامل؟","Delete entire entry?")))return;db.journal=db.journal.filter(x=>String(x.entry)!==String(entry));save();renderJournal();renderHome();toast(arEn("تم حذف القيد","Entry deleted"))};
+window.deleteEntry=entry=>{if(guardLinkedEntry(entry))return;if(!confirm(arEn("حذف القيد بالكامل؟","Delete entire entry?")))return;db.journal=db.journal.filter(x=>String(x.entry)!==String(entry));save();renderJournal();renderHome();toast(arEn("تم حذف القيد","Entry deleted"))};
 function getLedgerData(){
  const code=$("#ledgerAccount")?.value||"",fd=$("#ledgerFrom")?.value||"",td=$("#ledgerTo")?.value||"";
  if(!code)return null;
@@ -825,7 +850,7 @@ function renderZakatReport(){
  // Same inversion for revenue/expense: debit-minus-credit is positive for an expense and
  // negative for revenue, i.e. it is the negative of true profit — a loss would display as a
  // positive "net profit". Flip it so profit is positive and a loss is negative, as labeled.
- const netIncome=db.accounts.filter(a=>String(a.code).startsWith('4')||String(a.code).startsWith('5')).filter(isLeaf).reduce((s,a)=>s-amountFor(a,map).n,0);
+ const netIncome=db.accounts.filter(a=>String(a.code).startsWith('4')||String(a.code).startsWith('5')).filter(isLeaf).reduce((s,a)=>s-amountFor(a,endMap).n,0);
  // Fixed assets must be netted (cost minus accumulated depreciation/contra-asset accounts),
  // not summed by absolute value — Math.abs() on each leaf was ADDING accumulated depreciation
  // to the deduction instead of subtracting it, overstating the deduction.
@@ -834,10 +859,11 @@ function renderZakatReport(){
  const title=arEn(`مسودة إقرار الزكاة السنوي — ${year}`,`Annual Zakat Return Worksheet — ${year}`);
  const rows=[
  ['1',arEn('حقوق الملكية في نهاية السنة','Equity at year-end'),equity],
- ['2',arEn('صافي الربح / (الخسارة) خلال السنة','Net profit / (loss) for the year'),netIncome],
+ ['2',arEn('صافي الربح / (الخسارة) — النتيجة المتراكمة غير المقفلة حتى نهاية السنة','Net profit / (loss) — cumulative unclosed result to year-end'),netIncome],
  ['3',arEn('الأصول الثابتة — خصم أولي','Fixed assets — preliminary deduction'),-fixedAssets],
  ['4',arEn('الوعاء الزكوي المبدئي','Preliminary Zakat base'),zakatBase],
- ['5',arEn('الزكاة التقديرية بنسبة 2.5%','Indicative Zakat at 2.5%'),zakat]
+ ['5',arEn('الزكاة التقديرية بنسبة 2.5%','Indicative Zakat at 2.5%'),zakat],
+ ['—',arEn('للاطلاع فقط: أرصدة الأطراف ذات العلاقة الدائنة (224) — غير مضافة للوعاء، راجعها مع المحاسب القانوني','For review only: related-party credit balances (224) — not added to the base, review with your auditor'),db.accounts.filter(a=>String(a.code).startsWith('224')&&isLeaf(a)).reduce((s,a)=>s-amount(a.code),0)]
  ];
  const body=rows.map(r=>`<tr><td>${r[0]}</td><td class="report-name">${r[1]}</td><td class="num">${fmt(r[2])}</td></tr>`).join('');
  $('#reportArea').innerHTML=`<div class="panel-head"><div><h3>${title}</h3><span class="muted">${arEn('سنة مالية','Fiscal year')}: ${year}</span></div>${reportExportActions('reportArea')}</div><div class="tax-note">${arEn('هذه مسودة عمل مبنية على البيانات المحاسبية وليست إقراراً زكوياً نهائياً. المعالجة الزكوية الفعلية تعتمد على تصنيف كل بند وفق اللائحة التنفيذية وقواعد الهيئة، ويجب مراجعتها قبل التقديم.','This is a working worksheet, not a final ZATCA filing. Actual Zakat treatment depends on item-by-item classification under ZATCA regulations and must be reviewed before submission.')}</div><div class="table-wrap"><table><thead><tr><th>#</th><th>${arEn('البند','Item')}</th><th>${arEn('المبلغ (ريال)','Amount (SAR)')}</th></tr></thead><tbody>${body}</tbody></table></div><div class="journal-summary tax-summary"><div class="jsum"><span>${arEn('الوعاء الزكوي المبدئي','Preliminary Zakat base')}</span><b>${fmt(zakatBase)} SAR</b></div><div class="jsum"><span>${arEn('الزكاة المبدئية','Preliminary Zakat')}</span><b>${fmt(zakat)} SAR</b></div><div class="jsum"><span>${arEn('موعد الإقرار','Filing window')}</span><b>${arEn('خلال 120 يوماً من نهاية السنة الزكوية','Within 120 days from Zakat year-end')}</b></div></div>`;
@@ -863,7 +889,20 @@ function exportWholeReport(areaId, mode){
  return exportReportExcel(areaId);
 }
 
-function nextId(prefix,list){return prefix+String(list.length+1).padStart(5,"0")}
+function nextId(prefix,list){
+ // Highest existing number + 1 (not list.length + 1) so ids never repeat after a deletion or gap.
+ let max=0; (list||[]).forEach(x=>{const m=String(x?.id||'').match(/(\d+)$/); if(m&&String(x.id).startsWith(prefix)) max=Math.max(max,Number(m[1]));});
+ return prefix+String(Math.max(max,0)+1).padStart(5,"0");
+}
+function linkedDocFor(entry){
+ const e=String(entry);
+ return db.invoices.find(i=>String(i.journalEntry)===e)||db.collections.find(c=>String(c.journalEntry)===e)||null;
+}
+function guardLinkedEntry(entry){
+ const d=linkedDocFor(entry); if(!d) return false;
+ toast(arEn(`هذا القيد مرتبط بـ ${d.id} ولا يُعدَّل أو يُحذف من شاشة القيود حتى لا يختلف رصيد العميل عن الأستاذ. عدّله من شاشة العملاء والمبيعات.`,`This entry belongs to ${d.id} and can't be edited/deleted from Journal, so customer balances stay consistent with the ledger. Use Customers & Sales.`));
+ return true;
+}
 function ensureSalesAccounts(){
   // Do not create accounting accounts automatically. Posting accounts must already exist in the chart.
   return {
@@ -951,8 +990,8 @@ function invoiceFormPage(id){
   </div>
   <div class="tax-paper" id="taxInvoicePaper">
    <div class="tax-header">
-    <div class="tax-company"><div class="company-logo">M</div><div><h1>${esc('Mostafa\'s PC Data')}</h1><b>${arEn('فاتورة ضريبية','Tax Invoice')}</b><span>Tax Invoice</span></div></div>
-    <div class="tax-qr"><div class="fake-qr">▦<br>▣</div><small>${arEn('رمز الفاتورة','Invoice QR')}</small></div>
+    <div class="tax-company"><div class="company-logo">FJ</div><div><h1>${esc(inv?.sellerName||sellerDefaults().name)}</h1><b>${arEn('فاتورة ضريبية','Tax Invoice')}</b><span>Tax Invoice</span></div></div>
+    <div class="tax-qr"><div id="taxQrBox" class="tax-qr-box"></div><small>${arEn('رمز الفاتورة الضريبية (ZATCA)','Tax invoice QR (ZATCA)')}</small></div>
     <div class="tax-meta"><label>${arEn('رقم الفاتورة','Invoice No.')}</label><input id="iInvoiceNo" value="${esc(invoiceNo)}" ${inv?'disabled':''}>
       <label>${arEn('تاريخ الإصدار','Issue Date')}</label><input type="date" id="iDate" value="${today}">
       <label>${arEn('وقت الإصدار','Issue Time')}</label><input id="iTime" value="${esc(inv?.time||new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}))}">
@@ -961,10 +1000,10 @@ function invoiceFormPage(id){
    </div>
    <div class="tax-parties">
     <div class="party-box"><div class="party-title">${arEn('البائع','Seller')}</div>
-      <label>${arEn('اسم البائع','Seller Name')}</label><input id="iSellerName" value="${esc(inv?.sellerName||'Mostafa\'s PC Data')}">
-      <label>${arEn('العنوان','Address')}</label><textarea id="iSellerAddress">${esc(inv?.sellerAddress||'المملكة العربية السعودية')}</textarea>
-      <label>${arEn('الرقم الضريبي','VAT No.')}</label><input id="iSellerVat" value="${esc(inv?.sellerVat||'')}">
-      <label>${arEn('الرقم التجاري','CR No.')}</label><input id="iSellerCr" value="${esc(inv?.sellerCr||'')}">
+      <label>${arEn('اسم البائع','Seller Name')}</label><input id="iSellerName" value="${esc(inv?.sellerName||sellerDefaults().name)}">
+      <label>${arEn('العنوان','Address')}</label><textarea id="iSellerAddress">${esc(inv?.sellerAddress||sellerDefaults().addr)}</textarea>
+      <label>${arEn('الرقم الضريبي','VAT No.')}</label><input id="iSellerVat" value="${esc(inv?.sellerVat??sellerDefaults().vat)}">
+      <label>${arEn('الرقم التجاري','CR No.')}</label><input id="iSellerCr" value="${esc(inv?.sellerCr??sellerDefaults().cr)}">
     </div>
     <div class="party-box"><div class="party-title">${arEn('المشتري','Buyer')}</div>
       <label>${arEn('اسم المشتري','Buyer Name')}</label><select id="iCustomer">${customerOptions()}</select>
@@ -1004,15 +1043,32 @@ function invoiceFormPage(id){
   </div>
  </div>`;
 }
+function sellerDefaults(){
+ // Company details are typed once; later invoices reuse the last issued invoice's seller block.
+ const last=[...db.invoices].reverse().find(i=>i.sellerName||i.sellerVat)||{};
+ return {name:last.sellerName||'شركة فخر الجزيرة للحراسات الأمنية',addr:last.sellerAddress||'مكة المكرمة، المملكة العربية السعودية',vat:last.sellerVat||'',cr:last.sellerCr||'4031263286'};
+}
+function updateInvoiceQR(total,vat){
+ const box=document.getElementById('taxQrBox'); if(!box||!window.ZatcaQR) return;
+ try{
+  const date=$('#iDate')?.value||new Date().toISOString().slice(0,10);
+  const m=String($('#iTime')?.value||'').match(/(\d{1,2}):(\d{2})\s*([AaPpصم])?/);
+  let hh=m?Number(m[1]):0; const mm=m?m[2]:'00';
+  if(m&&m[3]){const pm=/[Ppم]/.test(m[3]); if(pm&&hh<12)hh+=12; if(!pm&&hh===12)hh=0;}
+  const ts=`${date}T${String(hh).padStart(2,'0')}:${mm}:00Z`;
+  const tlv=window.ZatcaQR.zatcaTLV(($('#iSellerName')?.value||'').trim(),($('#iSellerVat')?.value||'').trim(),ts,r2(total).toFixed(2),r2(vat).toFixed(2));
+  box.innerHTML=window.ZatcaQR.qrSvg(tlv,112);
+ }catch(err){console.warn('QR generation failed',err);box.innerHTML='';}
+}
 function readInvoiceItems(){
  return [...document.querySelectorAll('.invoice-item-row')].map(row=>({item:row.querySelector('.iItem')?.value||'اخرى',qty:Number(row.querySelector('.iQty')?.value||0),hours:Number(row.querySelector('.iHours')?.value||8),days:Number(row.querySelector('.iDays')?.value||30),unitPrice:Number(row.querySelector('.iUnitPrice')?.value||0)}));
 }
 function recalcInvoicePage(){
  const items=readInvoiceItems(); let gross=0;
- document.querySelectorAll('.invoice-item-row').forEach((row,i)=>{const x=items[i]||{};const amount=(x.qty||0)*(x.days||0)*(x.unitPrice||0);gross+=amount;const cell=row.querySelector('.invoice-line-total');if(cell)cell.textContent=fmt(amount)+' SAR';});
- const discount=Number($('#iDiscount')?.value||0),penalty=Number($('#iPenalty')?.value||0),extra=Number($('#iExtra')?.value||0);
- const line=gross, before=Math.max(0,gross-discount+penalty+extra),vat=+(before*.15).toFixed(2),total=+(before+vat).toFixed(2);
- if($('#sumGross'))$('#sumGross').textContent=fmt(gross)+' SAR'; if($('#sumBefore'))$('#sumBefore').textContent=fmt(before)+' SAR'; if($('#sumVat'))$('#sumVat').textContent=fmt(vat)+' SAR'; if($('#sumTotal'))$('#sumTotal').textContent=fmt(total)+' SAR'; return {items,gross,guards:items.reduce((s,x)=>s+(x.qty||0),0),hours:items.reduce((s,x)=>s+(x.hours||0),0),days:items.reduce((s,x)=>s+(x.days||0),0),rate:items[0]?.unitPrice||0,line,discount,penalty,extra,before,vat,total};
+ document.querySelectorAll('.invoice-item-row').forEach((row,i)=>{const x=items[i]||{};const amount=r2((x.qty||0)*(x.days||0)*(x.unitPrice||0));gross=r2(gross+amount);const cell=row.querySelector('.invoice-line-total');if(cell)cell.textContent=fmt(amount)+' SAR';});
+ const discount=r2($('#iDiscount')?.value),penalty=r2($('#iPenalty')?.value),extra=r2($('#iExtra')?.value);
+ const line=gross, before=r2(Math.max(0,gross-discount+penalty+extra)),vat=r2(before*.15),total=r2(before+vat);
+ if($('#sumGross'))$('#sumGross').textContent=fmt(gross)+' SAR'; if($('#sumBefore'))$('#sumBefore').textContent=fmt(before)+' SAR'; if($('#sumVat'))$('#sumVat').textContent=fmt(vat)+' SAR'; if($('#sumTotal'))$('#sumTotal').textContent=fmt(total)+' SAR'; updateInvoiceQR(total,vat); return {items,gross,guards:items.reduce((s,x)=>s+(x.qty||0),0),hours:items.reduce((s,x)=>s+(x.hours||0),0),days:items.reduce((s,x)=>s+(x.days||0),0),rate:items[0]?.unitPrice||0,line,discount,penalty,extra,before,vat,total};
 }
 function openInvoicePage(id){
  if(!db.customers.length){toast(arEn('أضف عميلاً أولاً','Add a customer first'));return}
@@ -1020,7 +1076,7 @@ function openInvoicePage(id){
  if(inv)$('#iCustomer').value=inv.customerId||''; else if(db.customers[0])$('#iCustomer').value=db.customers[0].id;
  const syncCustomer=()=>{const c=db.customers.find(x=>x.id===$('#iCustomer')?.value);if(!c)return;$('#iBuyerAddress').value=c.address||'';$('#iBuyerVat').value=c.taxNo||'';$('#iBuyerId').value=c.id||'';const ca=$('#iCustomerAccount');if(ca)ca.innerHTML=`<option value="${esc(c.accountCode||'')}">${esc(c.accountCode||'')} — ${esc(c.name)}</option>`;};
  $('#iCustomer')?.addEventListener('change',syncCustomer);syncCustomer();
- const bind=()=>{document.querySelectorAll('.iQty,.iHours,.iDays,.iUnitPrice,#iDiscount,#iPenalty,#iExtra').forEach(el=>{el.addEventListener('input',recalcInvoicePage);el.addEventListener('change',recalcInvoicePage);});document.querySelectorAll('.invoice-remove-row').forEach(b=>b.addEventListener('click',()=>{if(document.querySelectorAll('.invoice-item-row').length<=1)return;b.closest('tr').remove();reindexInvoiceRows();recalcInvoicePage();}));};
+ const bind=()=>{document.querySelectorAll('.iQty,.iHours,.iDays,.iUnitPrice,#iDiscount,#iPenalty,#iExtra,#iSellerName,#iSellerVat,#iDate,#iTime').forEach(el=>{el.addEventListener('input',recalcInvoicePage);el.addEventListener('change',recalcInvoicePage);});document.querySelectorAll('.invoice-remove-row').forEach(b=>b.addEventListener('click',()=>{if(document.querySelectorAll('.invoice-item-row').length<=1)return;b.closest('tr').remove();reindexInvoiceRows();recalcInvoicePage();}));};
  const reindex=()=>{document.querySelectorAll('.invoice-item-row').forEach((r,i)=>{const n=r.querySelector('.invoice-line-no');if(n)n.textContent=i+1;});bind();recalcInvoicePage();}; window.reindexInvoiceRows=reindex;
  $('#addInvoiceItem')?.addEventListener('click',()=>{const body=$('#invoiceItemsBody');const n=body.querySelectorAll('.invoice-item-row').length;const tr=document.createElement('tr');tr.className='invoice-item-row';tr.innerHTML=`<td class="invoice-line-no">${n+1}</td><td><select class="iItem">${INVOICE_ITEM_OPTIONS.map(x=>`<option value="${esc(x)}">${esc(arEn(x,({ 'حارس امن':'Security Guard','مشرف امن':'Security Supervisor','حارسة امن':'Female Security Guard','مدير مشروع':'Project Manager','سيارة':'Vehicle','اخرى':'Other'})[x]||x))}</option>`).join('')}</select></td><td><input class="iQty" type="number" min="0" step="0.01" value="1"></td><td><select class="iHours"><option value="6">6</option><option value="8" selected>8</option></select></td><td><input class="iDays" type="number" min="1" step="1" value="30"></td><td><input class="iUnitPrice" type="number" min="0" step="0.01" value="0"></td><td class="invoice-line-total num">0.00</td><td><button type="button" class="icon-btn invoice-remove-row">✕</button></td>`;body.appendChild(tr);bind();recalcInvoicePage();});
  bind();recalcInvoicePage(); $('#saveInvoicePage').onclick=()=>postInvoicePage(id);
@@ -1036,10 +1092,13 @@ function postInvoicePage(id){
  const custAccount=db.accounts.find(a=>Number(a.code)===Number(c.accountCode)); if(!custAccount)return toast(arEn('حساب العميل غير موجود داخل الشجرة','Customer account is missing from the chart'));
  const salesAccount=db.accounts.find(a=>Number(a.code)===salesCode); if(!salesAccount)return toast(arEn('حساب الإيراد غير موجود داخل الشجرة','Revenue account is missing from the chart'));
  if(/مردود|return/i.test(String(salesAccount.name||'')))return toast(arEn('لا يجوز ترحيل إيراد الفاتورة إلى حساب مردودات المبيعات. يتم ترحيل الفاتورة على حساب العميل نفسه كمدين، وحساب الإيراد كدائن.','Invoice revenue cannot be posted to Sales Returns. The invoice is posted to the customer account as debit and the revenue account as credit.'));
+ const sellerVat=($('#iSellerVat')?.value||'').trim();
+ if(!/^3\d{13}3$/.test(sellerVat)&&!confirm(arEn('الرقم الضريبي للبائع غير مكتمل أو غير صحيح (15 رقماً يبدأ وينتهي بالرقم 3). الفاتورة الضريبية بدونه لا تُعتمد نظامياً. هل تريد المتابعة على أي حال؟','Seller VAT number is missing/invalid (15 digits, starts and ends with 3). A tax invoice without it is not valid. Continue anyway?')))return;
  const lines=[]; lines.push({code:custAccount.code,debit:vals.total,credit:0}); lines.push({code:salesCode,debit:0,credit:vals.line}); lines.push({code:vatCode,debit:0,credit:vals.vat});
  const addLine=(inputId,acctId,debit,credit)=>{const amount=Number($(inputId)?.value||0),code=Number($(acctId)?.value||0);if(amount>0&&code)lines.push({code,debit,credit});};
  if(vals.discount>0&&!Number($('#iDiscountAccount').value))return toast(arEn('اختر حساب الخصم من الشجرة','Choose a discount account from the chart')); if(vals.penalty>0&&!Number($('#iPenaltyAccount').value))return toast(arEn('اختر حساب الجزاءات من الشجرة','Choose a penalty account from the chart')); if(vals.extra>0&&!Number($('#iExtraAccount').value))return toast(arEn('اختر حساب الإضافي من الشجرة','Choose an additional account from the chart'));
  addLine('#iDiscount','#iDiscountAccount',vals.discount,0); addLine('#iPenalty','#iPenaltyAccount',0,vals.penalty); addLine('#iExtra','#iExtraAccount',0,vals.extra);
+ {const D=r2(lines.reduce((s,l)=>s+l.debit,0)),C=r2(lines.reduce((s,l)=>s+l.credit,0)); if(Math.abs(D-C)>0.005)return toast(arEn(`قيد الفاتورة غير متوازن (مدين ${fmt(D)} / دائن ${fmt(C)}). راجع الخصم والجزاءات والإضافي.`,`Invoice entry is unbalanced (Dr ${fmt(D)} / Cr ${fmt(C)}). Check discount/penalty/additional.`));}
  let inv=id&&db.invoices.find(x=>x.id===id); if(inv){db.journal=db.journal.filter(x=>String(x.entry)!==String(inv.journalEntry));} else {inv={id:$('#iInvoiceNo')?.value.trim()||nextId('INV-',db.invoices)};if(db.invoices.some(x=>x.id===inv.id))inv.id=nextId('INV-',db.invoices);db.invoices.push(inv)}
  const entry=Math.max(0,...db.journal.map(x=>Number(x.entry)||0))+1,date=$('#iDate').value||new Date().toISOString().slice(0,10),desc=$('#iDesc').value.trim()||'خدمات';
  Object.assign(inv,{customerId:cid,date,time:$('#iTime').value.trim(),supplyDate:$('#iSupplyDate').value||date,desc,orderId:$('#iOrder').value.trim(),service:vals.items[0]?.item||'اخرى',items:vals.items,guards:vals.guards,hours:vals.hours,days:vals.days,rate:vals.rate,lineAmount:vals.line,discount:vals.discount,penalty:vals.penalty,extra:vals.extra,subtotal:vals.before,vat:vals.vat,total:vals.total,journalEntry:entry,status:'issued',salesAccountCode:salesCode,vatAccountCode:vatCode,sellerName:$('#iSellerName').value.trim(),sellerAddress:$('#iSellerAddress').value.trim(),sellerVat:$('#iSellerVat').value.trim(),sellerCr:$('#iSellerCr').value.trim()});
@@ -1054,7 +1113,7 @@ function exportInvoiceExcel(id){
 }
 function orderForm(id){const o=id&&db.salesOrders.find(x=>x.id===id);return `<h3>${arEn('أمر بيع','Sales Order')}</h3><div class="form-grid"><div class="field"><label>${arEn('العميل','Customer')}</label><select id="oCustomer">${customerOptions()}</select></div><div class="field"><label>${arEn('التاريخ','Date')}</label><input type="date" id="oDate" value="${o?.date||new Date().toISOString().slice(0,10)}"></div><div class="field"><label>${arEn('القيمة','Order amount')}</label><input id="oTotal" type="number" step="0.01" value="${o?.total||''}"></div><div class="field"><label>${arEn('البيان','Description')}</label><input id="oDesc" value="${esc(o?.desc||'أمر بيع')}"></div></div><div class="modal-foot"><button class="gold-btn" id="saveOrder">${arEn('حفظ أمر البيع','Save Order')}</button><button class="soft-btn" onclick="closeModal()">${arEn('إلغاء','Cancel')}</button></div>`}
 window.openSalesOrderModal=id=>{if(!db.customers.length){toast(arEn('أضف عميلاً أولاً','Add a customer first'));return}const m=$("#modal");m.innerHTML=orderForm(id);$("#modalBack").classList.add('show');if(id)$("#oCustomer").value=db.salesOrders.find(x=>x.id===id)?.customerId||'';$("#saveOrder").onclick=()=>{const cid=$("#oCustomer").value,total=Number($("#oTotal").value||0);if(!cid||total<=0)return toast(arEn('أدخل البيانات المطلوبة','Enter required data'));let o=id&&db.salesOrders.find(x=>x.id===id);if(!o){o={id:nextId('SO-',db.salesOrders)};db.salesOrders.push(o)}Object.assign(o,{customerId:cid,date:$("#oDate").value,total,desc:$("#oDesc").value});save();closeModal();renderCustomers();toast(arEn('تم حفظ أمر البيع','Sales order saved'))}}
-window.openCollectionModal=invoiceId=>{const inv=db.invoices.find(x=>x.id===invoiceId),paid=db.collections.filter(x=>x.invoiceId===invoiceId).reduce((s,x)=>s+x.amount,0),due=Math.max(0,inv.total-paid);const m=$("#modal");m.innerHTML=`<h3>${arEn('تسديد من داخل الفاتورة','Payment from Invoice')}</h3><div class="form-grid"><div class="field"><label>${arEn('الفاتورة','Invoice')}</label><input value="${esc(inv.id)} — ${fmt(inv.total)} SAR" disabled></div><div class="field"><label>${arEn('المتبقي','Remaining')}</label><input value="${fmt(due)} SAR" disabled></div><div class="field"><label>${arEn('مبلغ التسديد','Payment amount')}</label><input id="payAmount" type="number" max="${due}" step="0.01"></div><div class="field"><label>${arEn('حساب التحصيل','Collection account')}</label><select id="payAccount">${db.accounts.filter(a=>isLeaf(a)&&/خزين|نقد|بنك|bank|cash/i.test(a.name||'')).map(a=>`<option value="${a.code}">${a.code} — ${esc(a.name)}</option>`).join('')}</select></div></div><div class="modal-foot"><button class="gold-btn" id="savePayment">${arEn('تسجيل السداد','Record Payment')}</button><button class="soft-btn" onclick="closeModal()">${arEn('إلغاء','Cancel')}</button></div>`;$("#modalBack").classList.add('show');$("#savePayment").onclick=()=>{const amount=Number($("#payAmount").value||0),code=Number($("#payAccount").value);if(amount<=0||amount>due)return toast(arEn('مبلغ غير صحيح','Invalid amount'));const ac=db.accounts.find(a=>Number(a.code)===code);const entry=Math.max(0,...db.journal.map(x=>Number(x.entry)||0))+1,date=new Date().toISOString().slice(0,10);const r={id:nextId('PAY-',db.collections),invoiceId:inv.id,customerId:inv.customerId,date,amount,accountCode:code,journalEntry:entry};db.collections.push(r);const cust=db.customers.find(c=>c.id===inv.customerId);db.journal.push({date,month:date.slice(0,7),type:'تحصيل عميل',entry,search:`${code}- ${ac?.name||''}`,code,a1:ac?.name||'',a2:'',a3:'',a4:'',a5:ac?.name||'',debit:amount,credit:0,balance:amount,desc:`تحصيل ${inv.id}`,invoice:inv.id});db.journal.push({date,month:date.slice(0,7),type:'تحصيل عميل',entry,search:`${cust.accountCode}- ${cust.name}`,code:cust.accountCode,a1:cust.name,a2:'',a3:'',a4:'',a5:cust.name,debit:0,credit:amount,balance:-amount,desc:`تحصيل ${inv.id}`,invoice:inv.id});save();closeModal();renderCustomers();renderHome();toast(arEn('تم تسجيل السداد وربطه بالقيد','Payment recorded and linked to journal'))}}
+window.openCollectionModal=invoiceId=>{const inv=db.invoices.find(x=>x.id===invoiceId),paid=db.collections.filter(x=>x.invoiceId===invoiceId).reduce((s,x)=>s+x.amount,0),due=Math.max(0,r2(inv.total-paid));const m=$("#modal");m.innerHTML=`<h3>${arEn('تسديد من داخل الفاتورة','Payment from Invoice')}</h3><div class="form-grid"><div class="field"><label>${arEn('الفاتورة','Invoice')}</label><input value="${esc(inv.id)} — ${fmt(inv.total)} SAR" disabled></div><div class="field"><label>${arEn('المتبقي','Remaining')}</label><input value="${fmt(due)} SAR" disabled></div><div class="field"><label>${arEn('مبلغ التسديد','Payment amount')}</label><input id="payAmount" type="number" max="${due}" step="0.01"></div><div class="field"><label>${arEn('تاريخ السداد','Payment date')}</label><input id="payDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div class="field"><label>${arEn('حساب التحصيل','Collection account')}</label><select id="payAccount">${db.accounts.filter(a=>isLeaf(a)&&String(a.code).startsWith('121')&&/خزين|نقد|بنك|bank|cash/i.test(a.name||'')).map(a=>`<option value="${a.code}">${a.code} — ${esc(a.name)}</option>`).join('')}</select></div></div><div class="modal-foot"><button class="gold-btn" id="savePayment">${arEn('تسجيل السداد','Record Payment')}</button><button class="soft-btn" onclick="closeModal()">${arEn('إلغاء','Cancel')}</button></div>`;$("#modalBack").classList.add('show');$("#savePayment").onclick=()=>{const amount=r2($("#payAmount").value||0),code=Number($("#payAccount").value);if(amount<=0||amount>due+0.005)return toast(arEn('مبلغ غير صحيح','Invalid amount'));const ac=db.accounts.find(a=>Number(a.code)===code);const entry=Math.max(0,...db.journal.map(x=>Number(x.entry)||0))+1,date=($("#payDate")?.value)||new Date().toISOString().slice(0,10);const r={id:nextId('PAY-',db.collections),invoiceId:inv.id,customerId:inv.customerId,date,amount,accountCode:code,journalEntry:entry};db.collections.push(r);const cust=db.customers.find(c=>c.id===inv.customerId);db.journal.push({date,month:date.slice(0,7),type:'تحصيل عميل',entry,search:`${code}- ${ac?.name||''}`,code,a1:ac?.name||'',a2:'',a3:'',a4:'',a5:ac?.name||'',debit:amount,credit:0,balance:amount,desc:`تحصيل ${inv.id}`,invoice:inv.id});db.journal.push({date,month:date.slice(0,7),type:'تحصيل عميل',entry,search:`${cust.accountCode}- ${cust.name}`,code:cust.accountCode,a1:cust.name,a2:'',a3:'',a4:'',a5:cust.name,debit:0,credit:amount,balance:-amount,desc:`تحصيل ${inv.id}`,invoice:inv.id});save();closeModal();renderCustomers();renderHome();toast(arEn('تم تسجيل السداد وربطه بالقيد','Payment recorded and linked to journal'))}}
 function init(){
  document.addEventListener('click',e=>{
   const p=e.target.closest('[data-section-print],[data-section-excel],[data-section-pdf]'); if(!p)return;
@@ -1142,6 +1201,10 @@ init();
 
 /* Administrative / HR document templates */
 (function initAdminDocs(){
+ // These helpers live inside the accounting IIFE; use safe local shims so the HR forms never crash.
+ const arEn=(a,e)=>typeof window.arEn==='function'?window.arEn(a,e):a;
+ const applyLang=()=>{if(typeof window.applyLang==='function')window.applyLang()};
+ const showToast=m=>{if(typeof window.showToast==='function')window.showToast(m)};
  const area=()=>document.querySelector('#adminDocArea');
  const select=()=>document.querySelector('#adminDocSelect');
  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
@@ -1151,7 +1214,7 @@ init();
  const wrap=(title,sub,body)=>`<article class="admin-doc-sheet" dir="rtl"><div class="doc-company">شركة فخر الجزيرة للحراسات الأمنية</div><h1>${title}</h1>${sub?`<div class="doc-subtitle">${sub}</div>`:''}<div class="doc-content">${body}</div><div class="doc-footer"><span>شركة فخر الجزيرة للحراسات الأمنية</span><span>${new Date().toLocaleDateString('ar-SA')}</span></div></article>`;
  const contract=()=>wrap('عقد عمل','نموذج مستقل قابل للتعديل والطباعة',`${editable('contract_all',`
  <div class="doc-grid two">${field('رقم العقد','contract_no','26-09-0001')}${field('تاريخ العقد','contract_date','14/09/2026م')}</div>
- <p>إنه في يوم الأربعاء بتاريخ ${inline('hijri_date','03/04/1448هـ')} الموافق: ${inline('greg_date','14/09/2026م')} قد تم الاتفاق بين كل من:</p>
+ <p>إنه في يوم <input class="inline-input" data-doc-key="weekday" value="الأربعاء"> بتاريخ ${inline('hijri_date','03/04/1448هـ')} الموافق: ${inline('greg_date','14/09/2026م')} قد تم الاتفاق بين كل من:</p>
  <p>أ- شركة فخر الجزيرة للحراسات الأمنية سجل تجاري رقم (4031263286)، مكة، المملكة العربية السعودية ويمثلها في هذا العقد زهير سفر القثامي بصفته المدير العام جوال رقم (0537030099) والمشار اليها في هذا العقد الطرف الأول.</p>
  <p>ب- السيد / ${inline('employee_name','اسم الموظف')} رقم الهوية ${inline('employee_id','رقم الهوية')} - عنوانه / ${inline('address','مكه المكرمه')} رقم الجوال / ${inline('mobile','رقم الجوال')} والمشار اليه في الطرف الثاني.</p>
  <h3>المادة الأولى : موضوع العقد-:</h3><p>يوافق الطرف الثاني على العمل لدى الطرف الأول وتحت إدارته وأشرافه أو إدارة من ينوب عنه في وفق شروط هذا العقد في وظيفة ( حارس امن ) أو أي وظيفة أخرى يتم تكليفه بها، ما لم تختلف اختلافًا جوهريًا عن مهامه الأصلية حسب حاجة العمل إذا رأى الطرف الأول تكليفه بأدائها ووافق الطرف الثاني على ذلك.</p>
@@ -1165,7 +1228,7 @@ init();
  <h3>المادة التاسعة : التزامات الطرف الثاني-:</h3><p>-1 ان يباشر مهام وظيفته في المقر الذي يحدده الطرف الاول بما يعادل 8 ساعات يوميا وفي الاسبوع 48 ساعة وان يتم منحه اجازة من كل اسبوع حسب بند وزارة العمل والعمال بالمملكة العربية السعودية (98).</p><p>-2 ان يلتزم بعدم العمل لدى أي جهة كانت خلال فترة عمله لدى الطرف الأول سواء بأجر أو بدون أجر بما في ذلك الإجازات والعطل وبعد الدوام.</p><p>-3 ان يلتزم التزاما تاما بمواعيد العمل وفي حال الغياب المفاجئ بدون علم فانه يحق لشركة فخر الجزيرة للحراسات الأمنية الخصم بما يعادل يومين من راتبي.</p><p>-4 ان يلتزم التزاما تاما بلبس الزي الرسمي المحدد لي في العمل وان يكون نظيفا ومرتبا وفي حال عدم الالتزام يحق لشركة فخر الجزيرة للحراسات الأمنية الخصم بما يعادل يوم من راتبي.</p><p>-5 ان يلتزم التزاما تاما بعدم الانسحاب من الموقع وفي حال الانسحاب يخصم بما يعادل ثلاثة ايام من راتبي.</p><p>-6 في حال عدم التزامي بأي من لوائح ونظم العمل يطبق علي فورا لائحة الحسومات المعتمدة لدى شركة فخر الجزيرة للحراسات الأمنية.</p><p>-7 إذا لم أكمل مدة شهر بالشركة لا يحق لي المطالبة بأي راتب او مستحقات وأقر بأنها فترة تدريبية حسب بند وزارة العمل والعمال بالمملكة العربية السعودية (53).</p><p>-8 إذا لم أكمل مدة ست أشهر بالشركة لا يحق لي المطالبة بأي مستحقات وأقر بأنها فترة تجريبية حسب بند وزارة العمل والعمال بالمملكة العربية السعودية (53).</p><p>-9 في حالة رفضي من قبل العميل لأسباب منطقية يتم التعامل معي نظاميا مثل الاستقالة الفورية ولا يحق لي بأي مستحقات.</p><p>-10 عندما يرد على الشركة خطاب من أي مشروع بوجود مخالفة خلال فترة استلامي فإنه لا مانع لدي من خصم كامل مبلغ المخالفة من استحقاقي ومرتباتي وليس لي الحق في الاعتراض.</p><p>-11 ان يلتزم بتنفيذ اية مهام او اعمال يكلفه بها الطرف الأول في حالات الضرورة وفقًا لما تقتضيه مصلحة العمل.</p><p>-12 ان يلتزم بالمحافظة على ما في عهدته وأن يستخدمها في الأغراض المعدة لها ولأداء عمله الذي تتطلبه وظيفته.</p><p>-13 ان يبلغ فورًا الطرف الأول عن أي فعل أو تقصير ينتج عنه الحاق ضرر أو خسارة مادية أو معنوية بالعمل.</p><p>-14 ان يحافظ على الأسرار الخاصة بالعمل وعدم افشائها.</p><p>-15 ان يستخدم كل قدراته في تحسين وتطوير العمل.</p>
  <h3>المادة العاشرة : أحكام عامة-:</h3><p>-1 لا يترتب على هذا العقد أي التزامات على الطرف الأول في مواجهة من يعولهم الطرف الثاني.</p><p>-2 يعتبر عنوان الطرف الأول عنوانًا مشتركًا لكلا الطرفين ويحق للطرف الأول أن يسلم فيه جميع الإشعارات والإخطارات إلى الطرف الثاني باليد أو وضعها على لوحة الإعلانات في مقر العمل.</p><p>-3 أي خلاف ينشأ بين طرفي العقد بسبب تنفيذه أو تفسيره يتم حله وديًا فإذا تعذر ذلك فيعرض النزاع على لجان العمل المختصة في مدينة مكة.</p><p>-4 تحتسب المدة في هذا العقد بالتقويم الميلادي.</p><p>-5 يقر الطرف الثاني بأنه لا توجد لديه أي أمراض مزمنة، وأن الوثائق المقدمة منه صحيحة ومكتملة، وفي حالة ظهور خلاف ذلك يحق للطرف الأول إنهاء هذا العقد.</p><p>-6 يلغي هذا العقد أي عقد أو اتفاق سابق بين الطرفين.</p><p>-7 كل ما لم يرد بشأنه نص في هذا العقد يطبق عليه نظام العمل والعمال المعمول به في المملكة العربية السعودية.</p><p>-8 الالتزام التام بأوقات الدوام الرسمي.</p><p>-9 يقر الطرف الثاني بأنه قد سبق له قبل التوقيع على هذا العقد الاطلاع على ما جاء في لائحة تنظيم العمل المعمول بها لدى الطرف الأول وأنه ملتزم بما جاء فيها.</p>
  <h3>المادة الحادي عشر : نسخ العقد:</h3><p>-1 تم تحرير العقد من نسختين.</p><p>على ما ذكر تم تنظيم هذا العقد والله خير الشاهدين ،،،</p>
- <div class="signature-grid"><div><b>الطرف الأول</b><p>شركة فخر الجزيرة للحراسات الأمنية</p><p>الاسم / أ / زهير العتيبي</p><p>التوقيع / __________________</p><p>البصمة / __________________</p></div><div><b>الطرف الثاني</b><p>الاسم / ${inline('sig_name','اسم الموظف')}</p><p>التوقيع / __________________</p><p>البصمة / __________________</p></div></div>`)}
+ <div class="signature-grid"><div><b>الطرف الأول</b><p>شركة فخر الجزيرة للحراسات الأمنية</p><p>الاسم / أ / زهير سفر القثامي</p><p>التوقيع / __________________</p><p>البصمة / __________________</p></div><div><b>الطرف الثاني</b><p>الاسم / ${inline('sig_name','اسم الموظف')}</p><p>التوقيع / __________________</p><p>البصمة / __________________</p></div></div>`)}
  `);
  const penalties=()=>wrap('لائحة الجزاءات الإدارية','تقرير مستقل قابل للتعديل والطباعة',`${editable('penalties_all',`<p><b>ملاحظة:</b> هذه اللائحة تعتبر جزء لا يتجزأ من اتفاقية العمل التي تم توقيعها وسيتم الرجوع اليها والعمل بها.</p><h3>إقرار وتعهد</h3><p>أقر أنا / ${inline('pen_name','اسم الموظف')} رقم : ${inline('pen_id','رقم الهوية')} الموظف في شركة فخر الجزيرة للحراسات الأمنية بأنني قد اطلعت على لائحة النظام الداخلي للشركة وعلى علم تام بها والتي تعتبر جزء لا يتجزأ من عقد العمل وأن ألتزم بمراعاتي كافة الأوامر والتعليمات التي تصدر من إدارة الشركة أو المسؤولين، كما ألتزم بكافة الالتزامات وأن أنفذ بدقة أحكام لوائح الشركة وتعليماتها وأن أحافظ على حسن السير والسلوك والسمعة الطيبة والمحافظة على أموال وممتلكات الشركة .. كما ألتزم بالمحافظة على كرامة الوظيفة وحسن المظهر وأن أظهر بمظهر لائق يتفق وطبيعة الوظيفة التي أشغلها ومكان العمل وعدم الغياب والتأخير والانسحاب وإذا حصل مني خلاف ذلك سوف أكون عرضة للجزاء وليس لي مطالبة على الشركة من حقوق مالية أو ادعاء خاص. وهذا إقرار مني بما جاء فيه.</p><p>المقرر بما فيه</p><p>الاسم : ${inline('pen_sig_name','')} التوقيع : ${inline('pen_sig','')} البصمة : ${inline('pen_finger','')} التاريخ : ${inline('pen_date',' / / 2026م')}</p><p>نحرص على التحفيز وليس العقاب ولسنا حريصين على خصم أي مبلغ من الراتب وسيسبق الخصم إنذار شفهي ثم إنذار خطي أول وثاني ثم الخصم وفي حالة استمرار المخالفة سيكون هناك إنذار بالفصل، ثم إنهاء الخدمات بعد التحقيق وبدون أي تعويض لنهاية الخدمة.</p><table class="doc-table"><thead><tr><th>م</th><th>المخالفات أثناء العمل</th><th>خصم من الراتب</th></tr></thead><tbody><tr><td>1</td><td>التأخير، عدم لبس الكاب، عدم لبس الجزمة أو لبسها بشكل غير كامل، عدم لبس الحزام، عدم حمل لوحة اسم أو بطاقة الأحوال، عدم لبس العصا وحامل العصا، عدم حلق شعر الرأس أو سوء القيافة، التدخين أثناء العمل، المزاح أثناء العمل، وضع اليدين في الجيب، عدم الرد على الجهاز، التستر على ملاحظات الزميل، التعامل غير الجيد مع الآخرين، عدم اتباع تعليمات التحضير التي أبلغ بها.</td><td>حسم نصف يوم، وفي حالة تكرارها يتم خصم يوم.</td></tr><tr><td>2</td><td>الغياب، التجمعات في المواقع، عدم متابعة دخول أو خروج المواد.</td><td>حسم يومين من الموقع.</td><tr><td>3</td><td>الغياب أيام العيد والانسحاب من العمل بدون إذن مسبق.</td><td>حسم أربعة أيام.</td></tr><tr><td>4</td><td>الغياب عن العمل لمدة خمسة أيام أو أكثر متتالية خلال الشهر أو عشرون يوما في السنة.</td><td>فصل بدون مستحقات.</td></tr><tr><td>5</td><td>النوم أثناء العمل، عدم التقيد بالتعليمات، الانشغال بالجوال أو الأجهزة الذكية أو الصحف والمجلات.</td><td>حسم ثلاثة أيام.</td></tr><tr><td>6</td><td>مخالفات أخرى لم يتم ذكرها بعالية:</td><td>${inline('pen_other','يحدد حسب الحالة')}</td></tr></tbody></table>`)}`);
  const directWork=()=>wrap('مباشرة عمل الموظف','تقرير مستقل قابل للتعديل والطباعة',`${editable('direct_all',`<h3>مباشرة عمل</h3><table class="doc-table"><tbody><tr><th>اسم الموظف</th><td>${inline('dw_name','')}</td><th>المسمى الوظيفي</th><td>${inline('dw_job','حارس أمن')}</td><th>الموقع</th><td>${inline('dw_site','')}</td></tr></tbody></table><p>نفيدكم بأن الموظف المذكور بعالية باشر العمل لدينا اعتبارًا من:</p><p>التاريخ: ${inline('dw_hijri',' / / 144هـ')} الموافق: ${inline('dw_greg',' / / 202م')}</p><div class="checks"><label><input type="checkbox" data-doc-key="dw_new"> تعيين جديد</label><label><input type="checkbox" data-doc-key="dw_rehire"> إعادة تعيين</label><label><input type="checkbox" data-doc-key="dw_return"> عودة من الإجازة</label><label><input type="checkbox" data-doc-key="dw_other"> أخرى</label></div><p>أقر أنا الحارس / ${inline('dw_guard','')} هوية وطنية رقم : ${inline('dw_id','')} بأنني أعمل لدى شركة فخر الجزيرة للحراسات الأمنية فترة تجربة لمدة ست أشهر وأرغب بعدم تسجيلي في التأمينات الاجتماعية بإرادتي الشخصية وبعدها يتم تقييمي من قبل الإدارة في حال تم الاجتياز من قبل الإدارة يتم الاستمرار في العمل وفي حال لم يتم الاجتياز لا يحق لي المطالبة الشركة بأية مطالبات أو أي حقوق مالية.</p><p>اسم الحارس : ${inline('dw_guard_name','')}</p><p>التوقيع : ${inline('dw_sig','')} البصمة : ${inline('dw_finger','')}</p><div class="signature-grid"><div>الموارد البشرية والمالية<br><br>________________________</div><div>مشرف الموقع<br><br>________________________</div><div>رئيس العمليات<br><br>________________________</div></div>`)}`);
@@ -1179,11 +1242,24 @@ init();
  };
  const employeeDefaults={name:'',id:'',mobile:'',address:'مكه المكرمه',job:'حارس أمن',site:'',contractDate:'',startDate:'',basicSalary:'1500',housing:'500',otherAllowance:'1000',totalSalary:'3000',bank:'',account:'',iban:''};
  const empMap={name:['employee_name','sig_name','pen_name','pen_sig_name','dw_name','dw_guard','dw_guard_name','medical_name','uniform_name','guard_name','iban_name'],id:['employee_id','pen_id','dw_id','guard_id','iban_id'],mobile:['mobile'],address:['address'],job:['dw_job','medical_job'],site:['dw_site'],basicSalary:['basic_salary'],housing:['housing'],otherAllowance:['other_allowance'],totalSalary:['total_salary'],bank:['iban_bank'],account:['iban_account'],iban:['iban_no']};
- function empGet(){const o={...employeeDefaults};Object.keys(o).forEach(k=>{const v=localStorage.getItem('employee-'+k);if(v!==null)o[k]=v});return o}
+ function tafqeet(n){
+ n=Math.floor(Number(n)||0); if(n<=0) return 'صفر';
+ const ones=['','واحد','اثنان','ثلاثة','أربعة','خمسة','ستة','سبعة','ثمانية','تسعة','عشرة','أحد عشر','اثنا عشر','ثلاثة عشر','أربعة عشر','خمسة عشر','ستة عشر','سبعة عشر','ثمانية عشر','تسعة عشر'];
+ const tens=['','','عشرون','ثلاثون','أربعون','خمسون','ستون','سبعون','ثمانون','تسعون'];
+ const hund=['','مائة','مائتان','ثلاثمائة','أربعمائة','خمسمائة','ستمائة','سبعمائة','ثمانمائة','تسعمائة'];
+ const b1000=x=>{const p=[],h=Math.floor(x/100),r=x%100; if(h)p.push(hund[h]); if(r){ if(r<20)p.push(ones[r]); else {const o=r%10,t=Math.floor(r/10); p.push(o?ones[o]+' و'+tens[t]:tens[t]);} } return p.join(' و');};
+ const th=Math.floor(n/1000),rest=n%1000,out=[];
+ if(th){ let t; if(th===1)t='ألف'; else if(th===2)t='ألفان'; else if(th<=10)t=b1000(th)+' آلاف'; else if(th===200)t='مائتا ألف'; else t=b1000(th)+(th%100===0?' ألف':' ألفًا'); out.push(t); }
+ if(rest) out.push(b1000(rest));
+ return out.join(' و');
+}
+window.__tafqeet=tafqeet;
+function empGet(){const o={...employeeDefaults};Object.keys(o).forEach(k=>{const v=localStorage.getItem('employee-'+k);if(v!==null)o[k]=v});return o}
  function empSave(){document.querySelectorAll('[data-employee-key]').forEach(el=>localStorage.setItem('employee-'+el.dataset.employeeKey,el.value||''));syncEmployeeToCurrentForm();showToast(arEn('تم حفظ بيانات الموظف بنجاح','Employee data saved successfully'),'ok')}
  function loadEmpPanel(){const o=empGet();document.querySelectorAll('[data-employee-key]').forEach(el=>{const v=o[el.dataset.employeeKey];if(v!==undefined)el.value=v})}
- function syncEmployeeToCurrentForm(){const s=select()?.value;if(!s)return;const o=empGet();Object.entries(empMap).forEach(([k,keys])=>keys.forEach(key=>{const el=area()?.querySelector(`[data-doc-key="${key}"]`);if(el && o[k]!==undefined){el.value=o[k];localStorage.setItem('admin-doc-'+s+'-'+key,o[k])}}));
-   const d=area(); if(d){const cd=d.querySelector('[data-doc-key="contract_date"]'); if(cd&&o.contractDate){cd.value=new Date(o.contractDate+'T00:00:00').toLocaleDateString('ar-SA')} const gd=d.querySelector('[data-doc-key="greg_date"]'); if(gd&&o.contractDate){gd.value=new Date(o.contractDate+'T00:00:00').toLocaleDateString('en-GB')} const dwg=d.querySelector('[data-doc-key="dw_greg"]'); if(dwg&&o.startDate){dwg.value=new Date(o.startDate+'T00:00:00').toLocaleDateString('en-GB')}}
+ function syncEmployeeToCurrentForm(){const s=select()?.value;if(!s)return;const o=empGet();
+   [['basicSalary','basic_words'],['housing','housing_words'],['otherAllowance','other_words'],['totalSalary','total_words']].forEach(([k,wk])=>{const el=area()?.querySelector('[data-doc-key="'+wk+'"]');const n=Number(o[k]);if(el&&o[k]!==''&&n>=0&&n<1000000){const w=tafqeet(n).replace(/(ألفان|مائتان)$/,m=>m==='ألفان'?'ألفا':'مائتا')+' ريال'+(k==='totalSalary'?' فقط':'');el.value=w;localStorage.setItem('admin-doc-'+s+'-'+wk,w);}});Object.entries(empMap).forEach(([k,keys])=>keys.forEach(key=>{const el=area()?.querySelector(`[data-doc-key="${key}"]`);if(el && o[k]!==undefined){el.value=o[k];localStorage.setItem('admin-doc-'+s+'-'+key,o[k])}}));
+   const d=area(); if(d){const cd=d.querySelector('[data-doc-key="contract_date"]'); if(cd&&o.contractDate){cd.value=new Date(o.contractDate+'T00:00:00').toLocaleDateString('ar-SA')} const gd=d.querySelector('[data-doc-key="greg_date"]'); if(gd&&o.contractDate){gd.value=new Date(o.contractDate+'T00:00:00').toLocaleDateString('en-GB')} const wdEl=d.querySelector('[data-doc-key="weekday"]'); if(wdEl&&o.contractDate){wdEl.value=new Date(o.contractDate+'T00:00:00').toLocaleDateString('ar-SA',{weekday:'long'});localStorage.setItem('admin-doc-'+s+'-weekday',wdEl.value)} const dwg=d.querySelector('[data-doc-key="dw_greg"]'); if(dwg&&o.startDate){dwg.value=new Date(o.startDate+'T00:00:00').toLocaleDateString('en-GB')}}
  }
  function collectCurrent(){saveDoc();const s=select()?.value;if(!s)return;const d=area();d?.querySelectorAll('[data-doc-key]').forEach(el=>{if(el.matches('input,textarea,select'))localStorage.setItem('admin-doc-'+s+'-'+el.dataset.docKey,el.type==='checkbox'?String(el.checked):el.value)});}
  function renderPrintAll(){const old=select()?.value||'contract';const saved=old;saveDoc();const keys=Object.keys(templates);area().innerHTML=keys.map(k=>`<div class="admin-doc-print-page" data-print-form="${k}">${templates[k]()}</div>`).join('');keys.forEach(k=>restoreDoc(k));applyLang();window.print();setTimeout(()=>{select().value=saved;render()},300)}
@@ -1192,6 +1268,6 @@ init();
  function restoreDoc(s){area()?.querySelectorAll('[data-doc-key]').forEach(el=>{const v=localStorage.getItem('admin-doc-'+s+'-'+el.dataset.docKey);if(v===null)return;if(el.matches('input,textarea,select')){if(el.type==='checkbox')el.checked=v==='true';else el.value=v}else el.innerHTML=v})}
  function render(){const s=select()?.value||'iban';area().innerHTML=templates[s]();restoreDoc(s);area().querySelectorAll('[data-doc-key]').forEach(el=>el.addEventListener('input',saveDoc));applyLang()}
  window.renderAdminDocs=render;
- document.addEventListener('DOMContentLoaded',()=>{loadEmpPanel();document.querySelectorAll('[data-employee-key]').forEach(el=>el.addEventListener('input',()=>{syncEmployeeToCurrentForm()}));select()?.addEventListener('change',()=>{saveDoc();render()});document.querySelector('#adminSaveData')?.addEventListener('click',()=>{empSave();syncEmployeeToCurrentForm();render()});document.querySelector('#adminSavePrint')?.addEventListener('click',()=>{empSave();saveDoc();window.print()});document.querySelector('#adminPrintAll')?.addEventListener('click',()=>{empSave();renderPrintAll()});document.querySelector('#adminDocsPrint')?.addEventListener('click',()=>{saveDoc();window.print()});document.querySelector('#adminDocsReset')?.addEventListener('click',()=>{const s=select()?.value;if(!s)return;if(confirm(arEn('سيتم مسح التعديلات المحفوظة لهذا النموذج وإعادته للأصل. هل تريد المتابعة؟','Saved edits for this form will be cleared. Continue?'))){area()?.querySelectorAll('[data-doc-key]').forEach(el=>localStorage.removeItem('admin-doc-'+s+'-'+el.dataset.docKey));render()}});if(select())render()});
- const oldOpenView=window.openView;window.openView=function(v){oldOpenView(v);if(v==='adminDocs')render()};
+ document.addEventListener('DOMContentLoaded',()=>{loadEmpPanel();['basicSalary','housing','otherAllowance'].forEach(k=>document.querySelector('[data-employee-key="'+k+'"]')?.addEventListener('input',()=>{const g=x=>Number(document.querySelector('[data-employee-key="'+x+'"]')?.value||0);const t=document.querySelector('[data-employee-key="totalSalary"]');if(t)t.value=g('basicSalary')+g('housing')+g('otherAllowance');}));document.querySelectorAll('[data-employee-key]').forEach(el=>el.addEventListener('input',()=>{syncEmployeeToCurrentForm()}));select()?.addEventListener('change',()=>{saveDoc();render()});document.querySelector('#adminSaveData')?.addEventListener('click',()=>{empSave();syncEmployeeToCurrentForm();render()});document.querySelector('#adminSavePrint')?.addEventListener('click',()=>{empSave();saveDoc();window.print()});document.querySelector('#adminPrintAll')?.addEventListener('click',()=>{empSave();renderPrintAll()});document.querySelector('#adminDocsPrint')?.addEventListener('click',()=>{saveDoc();window.print()});document.querySelector('#adminDocsReset')?.addEventListener('click',()=>{const s=select()?.value;if(!s)return;if(confirm(arEn('سيتم مسح التعديلات المحفوظة لهذا النموذج وإعادته للأصل. هل تريد المتابعة؟','Saved edits for this form will be cleared. Continue?'))){area()?.querySelectorAll('[data-doc-key]').forEach(el=>localStorage.removeItem('admin-doc-'+s+'-'+el.dataset.docKey));render()}});if(select())render()});
+ document.addEventListener('click',e=>{if(e.target.closest('.nav[data-view="adminDocs"]'))setTimeout(render,0)});
 })();

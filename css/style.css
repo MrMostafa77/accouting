@@ -237,3 +237,6 @@ body.firebase-locked > .app{visibility:hidden;pointer-events:none}
 .firebase-user-bar{display:flex;align-items:center;gap:8px;margin:0 0 10px;padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:12px}.firebase-user-bar span{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;opacity:.7}.firebase-user-bar button{padding:7px 10px}
 .firebase-data-error-box{position:fixed;z-index:100000;inset:auto 20px 20px 20px;padding:18px;border:1px solid #d4af37;border-radius:16px;background:#111827;color:#fff;display:grid;gap:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .firebase-data-error-box span{opacity:.8}.firebase-data-error-box button{justify-self:start}
+
+.tax-qr-box{width:112px;height:112px;margin:auto;background:#fff;border:1px solid #cfd6df;padding:2px;box-sizing:content-box}.tax-qr-box svg{display:block;width:112px;height:112px}
+.stat.neg strong{color:#ff6b6b}
